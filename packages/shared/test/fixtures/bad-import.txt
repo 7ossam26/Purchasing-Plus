@@ -1,0 +1,4 @@
+import { readFileSync } from 'node:fs';
+import 'node:net';
+import '@prisma/client';
+import '../../../apps/api/src/app.js';

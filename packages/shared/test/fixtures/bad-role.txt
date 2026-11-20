@@ -1,0 +1,4 @@
+if (user.role.name === 'anything') doWork();
+if (roleName === 'anything') doWork();
+if (roleId === 1) doWork();
+if (user.role?.name === 'anything') doWork();

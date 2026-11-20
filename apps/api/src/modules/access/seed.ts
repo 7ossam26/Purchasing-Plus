@@ -7,6 +7,7 @@ import {
 } from '@purchasing-plus/shared/permissions';
 
 import type { AppEnv } from '../../config/env.js';
+import { seedCatalog } from '../catalog-tree/seed.js';
 import { seedSettings } from '../settings/repo.js';
 
 import { writeAudit } from './audit.js';
@@ -143,6 +144,7 @@ export const seeds: {
 export async function bootstrap(db: PrismaClient, env: AppEnv) {
   await accessTransaction(db, true, async (tx) => {
     await seedSettings(tx);
+    await seedCatalog(tx, env.AUDIT_HMAC_SECRET);
     if (!(await tx.user.count({ where: { isSuperadmin: true } }))) {
       const data = createSupport.parse({
         username: env.SUPERADMIN_USERNAME,

@@ -7,7 +7,12 @@ import { parseEnv, type AppEnv } from './config/env.js';
 import { originCheck } from './middleware/access.js';
 import { errorHandler } from './middleware/errors.js';
 import { accessRoutes } from './modules/access/routes.js';
+import { attributes } from './modules/attributes/routes.js';
+import { catalog } from './modules/catalog/routes.js';
+import { catalogTree } from './modules/catalog-tree/routes.js';
 import { settings } from './modules/settings/routes.js';
+import { suppliers } from './modules/suppliers/routes.js';
+import { units } from './modules/units/routes.js';
 
 export interface AppOptions {
   databaseUrl: string;
@@ -48,6 +53,11 @@ export function createApp({
   app.use(express.json());
   app.use('/api/v1', accessRoutes());
   app.use('/api/v1/settings', settings);
+  app.use('/api/v1', attributes);
+  app.use('/api/v1/catalog', catalog);
+  app.use('/api/v1/catalog-tree', catalogTree);
+  app.use('/api/v1/suppliers', suppliers);
+  app.use('/api/v1/units', units);
   app.get('/api/health', async (_request, response, next) => {
     try {
       await db.$queryRaw(Prisma.sql`SELECT 1`);

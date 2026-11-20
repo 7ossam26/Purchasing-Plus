@@ -98,3 +98,25 @@ Built the users, roles, role editor and settings screens in the Admin shell, plu
 - **Web modules.** Lazy routes in `apps/web/src/pages/admin/` use the module registry, shared Arabic copy, and existing controls. Copying a role replaces the editor's selected permissions with the source's grantable keys and retains the destination's name, description and scope. The Admin sidebar links to Sites under «التكويدات» pending the P05 hub tile.
 - **Verification.** Lint, typecheck, 57 Vitest tests, coverage gates and production builds passed. Chromium at 360 px verified site creation, role creation and assignment as the seeded administrator, and settings preview and save. The assignee's existing session gained site access on its next API request. Local database verification used isolated PostgreSQL 18 because Docker's engine was unavailable.
 - **Deferred.** The P05 master-data hub and P17 audit viewer remain later work. The record managers use database-assigned IDs on save. A guaranteed pre-save ID preview would require reserving an identifier when the form opens.
+
+## P04 — Catalog API (2026-11-21)
+
+Built the tree, attributes, units, items, and suppliers APIs in `apps/api/src/modules/`. The catalog migration adds materialized paths, per-category code sequences, trigram indexes, and the price-history table. Startup seeds the five categories and 11 units once. Every mutation writes a signed audit row in the same transaction. Shared request schemas, Arabic normalization, and Egyptian mobile helpers live in `packages/shared/src/catalog/`. No dependencies were added.
+
+All endpoints are under `/api/v1`.
+
+| Area | Endpoints |
+|---|---|
+| Tree | `GET /catalog-tree/categories`, `GET /catalog-tree/nodes/:id`, `GET /catalog-tree/nodes/:id/children`, `POST /catalog-tree/categories`, `POST /catalog-tree/nodes`, `PUT /catalog-tree/nodes/order`, `PATCH /catalog-tree/nodes/:id`, `POST /catalog-tree/nodes/:id/move`, `POST /catalog-tree/nodes/:id/deactivate`, `DELETE /catalog-tree/nodes/:id` |
+| Catalog and picker | `GET /catalog/categories`, `GET /catalog/nodes/:id`, `GET /catalog/nodes/:id/children`, `GET /catalog/nodes/:id/items`, `GET /catalog/items/:id`, `GET /catalog/search?categoryId=&q=`, `POST /catalog/items`, `PATCH /catalog/items/:id`, `POST /catalog/items/:id/move`, `DELETE /catalog/items/:id` (deactivate) |
+| Attributes | `GET /attributes`, `GET /attributes/:id`, `POST /attributes`, `PATCH /attributes/:id`, `POST /attributes/:id/deactivate`, `DELETE /attributes/:id` |
+| Options | `POST /attributes/:id/options`, `PUT /attributes/:id/options/order`, `PATCH /attributes/:id/options/:optionId`, `POST /attributes/:id/options/:optionId/deactivate`, `DELETE /attributes/:id/options/:optionId` |
+| Node defaults | `GET /nodes/:id/attributes`, `PUT /nodes/:id/attributes`, `GET /nodes/:id/effective-attributes` |
+| Units | `GET /units`, `GET /units/:id`, `POST /units`, `PATCH /units/:id`, `POST /units/:id/deactivate`, `DELETE /units/:id` |
+| Suppliers | `GET /suppliers` (optional `categoryId` selects active suppliers), `GET /suppliers/:id`, `POST /suppliers`, `PATCH /suppliers/:id`, `POST /suppliers/:id/deactivate`, `DELETE /suppliers/:id` |
+
+- **Browsing.** The picker uses `catalog.view` alone. An inactive ancestor hides its branch from the picker. Item reads accept `includeInactive=true` with `masterData.view`. Folder results count immediate groups and all items in the subtree and supply an empty `coverThumbs` array. Paginated endpoints use `page` and `pageSize`. Search matches normalized substrings in names, codes, and attribute values within the selected category.
+- **Writes.** Reactivate through the resource's `PATCH` endpoint with `{ "isActive": true }`. Reorder requests send the complete sibling or option ID list, including inactive entries. `parentId: null` selects categories for reordering. Effective defaults keep the first occurrence of each active attribute from root to leaf. Item writes take `{ attributeId, value }` entries with text strings, decimal strings, or SELECT option IDs. Renaming a selected option refreshes affected search text in the same transaction.
+- **Open questions.** Category deletion returns 409 while suppliers are linked. If automatic unlinking is desired for suppliers with several categories, define that rule before changing the guard. Unit labels are currently limited to NUMBER attributes.
+- **Deferred.** P05 owns the UI, P06 owns images and thumbnails, and P12 writes and exposes prices. Recent items and «أخرى» conversion depend on request data. Item detail exposes a null price placeholder to callers holding `requests.viewPrices`.
+- **Verification.** Lint, typecheck, 154 Vitest tests, and coverage gates passed on an isolated PostgreSQL 18 instance because the Docker engine was unavailable. The HTTP tests cover permission and validation checks for every endpoint, moves through more than six levels, and 50 concurrent creates with consecutive codes. An Arabic substring query could use the GIN trigram index on the test database's Arabic locale.

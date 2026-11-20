@@ -91,10 +91,193 @@ model Site {
 }
 
 model Settings {
-  id               Int    @id
-  rfqIntro          String
-  supplyOrderIntro  String
-  agingDays         Int    @default(3)
+  id               Int       @id
+  rfqIntro         String
+  supplyOrderIntro String
+  agingDays        Int       @default(3)
+  catalogSeededAt  DateTime?
+}
+
+model CatalogNode {
+  id         Int                @id @default(autoincrement())
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  name       String
+  parentId   Int?
+  parent     CatalogNode?       @relation("CatalogTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children   CatalogNode[]      @relation("CatalogTree")
+  codePrefix String?            @unique
+  iconKey    String?
+  sortOrder  Int
+  isActive   Boolean            @default(true)
+  path       String
+  depth      Int
+  attributes NodeAttribute[]
+  items      CatalogItem[]
+  sequence   CodeSequence?
+  suppliers  SupplierCategory[]
+
+  @@index([parentId, sortOrder, id])
+  @@index([path(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+enum CatalogAttributeType {
+  TEXT
+  NUMBER
+  SELECT
+}
+
+model AttributeDefinition {
+  id        Int                         @id @default(autoincrement())
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+  name      String                      @unique
+  type      CatalogAttributeType
+  unitLabel String?
+  isActive  Boolean                     @default(true)
+  options   AttributeOption[]
+  nodes     NodeAttribute[]
+  values    CatalogItemAttributeValue[]
+
+  @@index([isActive, name])
+}
+
+model AttributeOption {
+  id          Int                         @id @default(autoincrement())
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  attributeId Int
+  attribute   AttributeDefinition         @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  label       String
+  sortOrder   Int
+  isActive    Boolean                     @default(true)
+  values      CatalogItemAttributeValue[]
+
+  @@unique([attributeId, label])
+  @@unique([attributeId, id])
+  @@index([attributeId, sortOrder, id])
+}
+
+model NodeAttribute {
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  nodeId      Int
+  attributeId Int
+  sortOrder   Int
+  node        CatalogNode         @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  attribute   AttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Restrict)
+
+  @@id([nodeId, attributeId])
+  @@index([nodeId, sortOrder])
+  @@index([attributeId])
+}
+
+model Unit {
+  id        Int           @id @default(autoincrement())
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  name      String        @unique
+  isActive  Boolean       @default(true)
+  items     CatalogItem[]
+
+  @@index([isActive, name])
+}
+
+model CatalogItem {
+  id              Int                         @id @default(autoincrement())
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  code            String                      @unique
+  name            String
+  description     String
+  isActive        Boolean                     @default(true)
+  searchText      String
+  nodeId          Int
+  node            CatalogNode                 @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+  unitId          Int
+  unit            Unit                        @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  attributeValues CatalogItemAttributeValue[]
+  prices          CatalogItemPrice[]
+
+  @@index([nodeId, name, id])
+  @@index([unitId])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+model CatalogItemAttributeValue {
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  itemId      Int
+  item        CatalogItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  attributeId Int
+  attribute   AttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Restrict)
+  textValue   String?
+  numberValue Decimal?            @db.Decimal(38, 12)
+  optionId    Int?
+  option      AttributeOption?    @relation(fields: [attributeId, optionId], references: [attributeId, id], onDelete: Restrict)
+
+  @@id([itemId, attributeId])
+  @@index([attributeId, optionId])
+}
+
+enum CatalogPriceSource {
+  APPROVED
+  REPRICED
+}
+
+model CatalogItemPrice {
+  id            Int                @id @default(autoincrement())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  itemId        Int
+  item          CatalogItem        @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  supplierId    Int
+  supplier      Supplier           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  requestId     Int
+  requestItemId Int
+  unitPrice     Decimal            @db.Decimal(14, 2)
+  source        CatalogPriceSource
+
+  @@index([itemId, createdAt, id])
+  @@index([supplierId])
+  @@index([requestId])
+  @@index([requestItemId])
+}
+
+model CodeSequence {
+  categoryId Int         @id
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  category   CatalogNode @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  lastValue  Int
+}
+
+model Supplier {
+  id             Int                @id @default(autoincrement())
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  name           String
+  contactPerson  String
+  whatsappNumber String             @unique
+  notes          String
+  isActive       Boolean            @default(true)
+  categories     SupplierCategory[]
+  prices         CatalogItemPrice[]
+
+  @@index([isActive, name, id])
+  @@index([name, id])
+}
+
+model SupplierCategory {
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  supplierId Int
+  supplier   Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  categoryId Int
+  category   CatalogNode @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([supplierId, categoryId])
+  @@index([categoryId])
 }
 
 model AuditLog {

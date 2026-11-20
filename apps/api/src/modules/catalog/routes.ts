@@ -1,0 +1,89 @@
+import * as s from '@purchasing-plus/shared';
+import { Router } from 'express';
+
+import { endpoint } from '../access/endpoint.js';
+import { listFolders, nodeWithBreadcrumb } from '../catalog-tree/service.js';
+
+import * as service from './service.js';
+
+export const catalog = Router();
+catalog.get(
+  '/categories',
+  ...endpoint(['catalog.view'], ({ tx, req }) => {
+    s.emptyInput.parse(req.query);
+    return listFolders(tx, null, undefined, true);
+  }),
+);
+catalog.get(
+  '/nodes/:id',
+  ...endpoint(['catalog.view'], ({ tx, req }) =>
+    nodeWithBreadcrumb(tx, s.pathId.parse(req.params.id), true),
+  ),
+);
+catalog.get(
+  '/nodes/:id/children',
+  ...endpoint(['catalog.view'], ({ tx, req }) =>
+    listFolders(tx, s.pathId.parse(req.params.id), undefined, true),
+  ),
+);
+catalog.get(
+  '/nodes/:id/items',
+  ...endpoint(['catalog.view'], (ctx) =>
+    service.listItems(
+      ctx,
+      s.pathId.parse(ctx.req.params.id),
+      s.browseItemFilters.parse(ctx.req.query),
+    ),
+  ),
+);
+catalog.get(
+  '/items/:id',
+  ...endpoint(['catalog.view'], (ctx) =>
+    service.getItem(
+      ctx,
+      s.pathId.parse(ctx.req.params.id),
+      s.itemVisibility.parse(ctx.req.query).includeInactive,
+    ),
+  ),
+);
+catalog.get(
+  '/search',
+  ...endpoint(['catalog.view'], (ctx) =>
+    service.search(ctx, s.catalogSearchFilters.parse(ctx.req.query)),
+  ),
+);
+catalog.post(
+  '/items',
+  ...endpoint(
+    ['catalog.create'],
+    (ctx) => service.addItem(ctx, s.createCatalogItem.parse(ctx.req.body)),
+    201,
+  ),
+);
+catalog.patch(
+  '/items/:id',
+  ...endpoint(['catalog.edit'], (ctx) =>
+    service.editItem(
+      ctx,
+      s.pathId.parse(ctx.req.params.id),
+      s.editCatalogItem.parse(ctx.req.body),
+    ),
+  ),
+);
+catalog.post(
+  '/items/:id/move',
+  ...endpoint(['catalog.edit'], (ctx) =>
+    service.moveItem(
+      ctx,
+      s.pathId.parse(ctx.req.params.id),
+      s.moveCatalogItem.parse(ctx.req.body).nodeId,
+    ),
+  ),
+);
+catalog.delete(
+  '/items/:id',
+  ...endpoint(['catalog.delete'], (ctx) => {
+    s.emptyInput.parse(ctx.req.body ?? {});
+    return service.deactivateItem(ctx, s.pathId.parse(ctx.req.params.id));
+  }),
+);

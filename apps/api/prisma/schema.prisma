@@ -7,3 +7,106 @@ datasource db {
   provider   = "postgresql"
   extensions = [pg_trgm]
 }
+
+enum SiteScope {
+  ASSIGNED
+  ALL
+}
+
+model User {
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  id             Int        @id @default(autoincrement())
+  name           String
+  username       String     @unique
+  passwordHash   String
+  isSuperadmin   Boolean    @default(false)
+  isActive       Boolean    @default(true)
+  failedAttempts Int        @default(0)
+  lockedUntil    DateTime?
+  lastLoginAt    DateTime?
+  roleId         Int?
+  role           Role?      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  sites          UserSite[]
+  sessions       Session[]
+  audits         AuditLog[]
+
+  @@index([roleId])
+  @@index([isActive, id])
+}
+
+model Role {
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  description String           @default("")
+  siteScope   SiteScope
+  permissions RolePermission[]
+  users       User[]
+}
+
+model RolePermission {
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  roleId    Int
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  key       String
+
+  @@id([roleId, key])
+}
+
+model UserSite {
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int
+  siteId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  @@id([userId, siteId])
+  @@index([siteId])
+}
+
+model Session {
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  id        String   @id
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Site {
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  address   String     @default("")
+  isActive  Boolean    @default(true)
+  users     UserSite[]
+}
+
+model AuditLog {
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  action     String
+  entity     String
+  entityId   String?
+  actorId    Int?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorLabel String?
+  ip         String?
+  oldValue   Json?
+  newValue   Json?
+  signature  String
+
+  @@index([actorId])
+  @@index([createdAt])
+  @@index([action])
+  @@index([entity])
+}

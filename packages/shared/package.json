@@ -6,13 +6,28 @@
   "main": "./dist/index.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": { "types": "./src/index.ts", "default": "./dist/index.js" },
-    "./permissions": { "types": "./src/permissions/index.ts", "default": "./dist/permissions/index.js" },
-    "./lifecycle": { "types": "./src/lifecycle/index.ts", "default": "./dist/lifecycle/index.js" },
-    "./i18n/ar": { "types": "./src/i18n/ar.ts", "default": "./dist/i18n/ar.js" }
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./permissions": {
+      "types": "./src/permissions/index.ts",
+      "default": "./dist/permissions/index.js"
+    },
+    "./lifecycle": {
+      "types": "./src/lifecycle/index.ts",
+      "default": "./dist/lifecycle/index.js"
+    },
+    "./i18n/ar": {
+      "types": "./src/i18n/ar.ts",
+      "default": "./dist/i18n/ar.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   }
 }

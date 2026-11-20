@@ -14,10 +14,13 @@
     "prisma": "prisma"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.2",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "@purchasing-plus/shared": "workspace:*",
     "express": "^5.0.0",
+    "express-rate-limit": "^8.7.5",
+    "helmet": "^8.3.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {

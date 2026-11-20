@@ -10,7 +10,7 @@ export const envSchema = z
     AUDIT_HMAC_SECRET: nonEmpty,
     SUPERADMIN_USERNAME: nonEmpty,
     SUPERADMIN_PASSWORD: nonEmpty,
-    PUBLIC_ORIGIN: z.url(),
+    PUBLIC_ORIGIN: z.url({ protocol: /^https?$/ }),
     STORAGE_DRIVER: z.enum(['local', 'r2']),
     R2_ACCOUNT_ID: z.string().optional(),
     R2_ACCESS_KEY_ID: z.string().optional(),
@@ -21,8 +21,18 @@ export const envSchema = z
   })
   .superRefine((env, ctx) => {
     if (env.STORAGE_DRIVER !== 'r2') return;
-    for (const key of ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET'] as const) {
-      if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'Required for R2 storage' });
+    for (const key of [
+      'R2_ACCOUNT_ID',
+      'R2_ACCESS_KEY_ID',
+      'R2_SECRET_ACCESS_KEY',
+      'R2_BUCKET',
+    ] as const) {
+      if (!env[key])
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'Required for R2 storage',
+        });
     }
   });
 
@@ -31,6 +41,10 @@ export type AppEnv = z.infer<typeof envSchema>;
 export function parseEnv(values: NodeJS.ProcessEnv): AppEnv {
   const result = envSchema.safeParse(values);
   if (result.success) return result.data;
-  const fields = [...new Set(result.error.issues.map((issue) => issue.path.join('.')))].join(', ');
-  throw new Error(`إعدادات البيئة ناقصة أو غير صحيحة / Missing or invalid environment variables: ${fields}`);
+  const fields = [
+    ...new Set(result.error.issues.map((issue) => issue.path.join('.'))),
+  ].join(', ');
+  throw new Error(
+    `إعدادات البيئة ناقصة أو غير صحيحة / Missing or invalid environment variables: ${fields}`,
+  );
 }

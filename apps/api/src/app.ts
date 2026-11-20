@@ -7,6 +7,7 @@ import { parseEnv, type AppEnv } from './config/env.js';
 import { originCheck } from './middleware/access.js';
 import { errorHandler } from './middleware/errors.js';
 import { accessRoutes } from './modules/access/routes.js';
+import { settings } from './modules/settings/routes.js';
 
 export interface AppOptions {
   databaseUrl: string;
@@ -46,6 +47,7 @@ export function createApp({
   app.use(originCheck(env.PUBLIC_ORIGIN));
   app.use(express.json());
   app.use('/api/v1', accessRoutes());
+  app.use('/api/v1/settings', settings);
   app.get('/api/health', async (_request, response, next) => {
     try {
       await db.$queryRaw(Prisma.sql`SELECT 1`);

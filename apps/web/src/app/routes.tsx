@@ -26,26 +26,69 @@ export function AppProviders() {
     </SessionProvider>
   );
 }
-function moduleRoutes(kind: 'admin' | 'other'): RouteObject[] {
-  return modules
-    .filter((module) =>
-      kind === 'admin' ? module.kind === 'admin' : module.kind !== 'admin',
-    )
-    .map((module) => ({
+const modulePages: Partial<Record<string, RouteObject['lazy']>> = {
+  users: async () => ({
+    Component: (await import('../pages/admin/users.js')).UsersPage,
+  }),
+  roles: async () => ({
+    Component: (await import('../pages/admin/roles.js')).RolesPage,
+  }),
+  settings: async () => ({
+    Component: (await import('../pages/admin/settings.js')).SettingsPage,
+  }),
+  sites: async () => ({
+    Component: (await import('../pages/admin/sites.js')).SitesPage,
+  }),
+};
+const childPages: Partial<Record<string, RouteObject['lazy']>> = {
+  'roles/new': async () => ({
+    Component: (await import('../pages/admin/role-editor.js')).NewRolePage,
+  }),
+  'roles/:roleId': async () => ({
+    Component: (await import('../pages/admin/role-editor.js')).RoleEditorPage,
+  }),
+};
+
+function moduleRoutes(): RouteObject[] {
+  return modules.map((module) => {
+    const shell = module.kind === 'admin' ? <AdminShell /> : <StandardShell />;
+    const page = modulePages[module.id];
+    return {
       path: module.path,
       element: <ProtectedRoute anyOf={module.anyOf} />,
       children: [
         {
-          index: true,
-          element: (
-            <section>
-              <h1 className="text-title sm:text-title-wide">{module.label}</h1>
-              <EmptyState title={ar.navigation.unavailable} />
-            </section>
-          ),
+          element: shell,
+          children: [
+            {
+              index: true,
+              lazy: page,
+              element: page ? undefined : (
+                <section>
+                  <h1 className="text-title sm:text-title-wide">
+                    {module.label}
+                  </h1>
+                  <EmptyState title={ar.navigation.unavailable} />
+                </section>
+              ),
+            },
+          ],
         },
+        ...(module.children ?? []).map(({ path, anyOf }) => ({
+          path,
+          element: <ProtectedRoute anyOf={anyOf} />,
+          children: [
+            {
+              element: shell,
+              children: [
+                { index: true, lazy: childPages[module.id + '/' + path] },
+              ],
+            },
+          ],
+        })),
       ],
-    }));
+    };
+  });
 }
 export const routes: RouteObject[] = [
   {
@@ -77,21 +120,7 @@ export const routes: RouteObject[] = [
           },
         ],
       },
-      ...(['admin', 'other'] as const).flatMap((kind) =>
-        moduleRoutes(kind).map((route) => {
-          // Permission gates sit outside the shell so denial only renders the bare page.
-          return {
-            path: route.path,
-            element: route.element,
-            children: [
-              {
-                element: kind === 'admin' ? <AdminShell /> : <StandardShell />,
-                children: route.children,
-              },
-            ],
-          };
-        }),
-      ),
+      ...moduleRoutes(),
       ...(import.meta.env.DEV
         ? [{ path: '/dev/ui', lazy: () => import('../pages/dev-ui.js') }]
         : []),

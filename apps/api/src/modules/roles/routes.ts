@@ -10,6 +10,7 @@ import {
   updateRole,
   deleteRole,
   roleById,
+  heldRoleId,
 } from './repo.js';
 import { assertEditable, assertGrant, assignable, roleDto } from './service.js';
 export const roles = Router();
@@ -25,13 +26,21 @@ roles.get(
   ...endpoint(['roles.view'], async ({ tx, req, viewer }) => {
     const { page, pageSize } = s.pagination.parse(req.query);
     const result = await listRoles(tx, page, pageSize);
-    return { ...result, items: result.items.map((r) => roleDto(r, viewer)) };
+    const ownRoleId = await heldRoleId(tx, viewer.userId);
+    return {
+      ...result,
+      items: result.items.map((r) => roleDto(r, viewer, ownRoleId)),
+    };
   }),
 );
 roles.get(
   '/:id',
   ...endpoint(['roles.view'], async ({ tx, req, viewer }) =>
-    roleDto(await roleById(tx, s.pathId.parse(req.params.id)), viewer),
+    roleDto(
+      await roleById(tx, s.pathId.parse(req.params.id)),
+      viewer,
+      await heldRoleId(tx, viewer.userId),
+    ),
   ),
 );
 roles.post(
@@ -79,6 +88,7 @@ roles.delete(
           409,
           'ROLE_IN_USE',
           'عدد المستخدمين المرتبطين بهذا الدور: ' + old._count.users,
+          'اسند للمستخدمين دورًا تاني قبل حذف الدور ده.',
         );
       await deleteRole(tx, old.id);
       await audit('role.delete', 'Role', old.id, roleDto(old, viewer));

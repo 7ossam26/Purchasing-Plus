@@ -6,7 +6,9 @@ interface Module {
   icon: string;
   path: string;
   kind: 'admin' | 'masterData' | 'reports' | 'operations';
+  parent?: string;
   anyOf: PermissionKey[];
+  children?: { path: string; anyOf: PermissionKey[] }[];
 }
 export const modules: Module[] = [
   {
@@ -26,14 +28,19 @@ export const modules: Module[] = [
     path: '/admin/roles',
     kind: 'admin',
     anyOf: ['roles.view'],
+    children: [
+      { path: 'new', anyOf: ['roles.manage'] },
+      { path: ':roleId', anyOf: ['roles.manage'] },
+    ],
   },
   {
     id: 'sites',
     label: 'المواقع',
     description: 'إدارة مواقع العمل',
     icon: 'MapPin',
-    path: '/admin/sites',
-    kind: 'admin',
+    path: '/master-data/sites',
+    kind: 'masterData',
+    parent: '/master-data',
     anyOf: ['sites.view'],
   },
   {

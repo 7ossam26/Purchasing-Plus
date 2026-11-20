@@ -24,7 +24,7 @@ interface PromptOptions extends Options {
   label?: string;
   initialValue?: string;
   required?: boolean;
-  mode?: 'value' | 'reason';
+  mode?: 'value' | 'reason' | 'password';
 }
 interface DialogActions {
   confirm: (options: Options) => Promise<boolean>;
@@ -89,8 +89,10 @@ function Question({ request }: { request: Pending }) {
   const { options, finish, isPrompt } = request;
   const [value, setValue] = useState(options.initialValue ?? '');
   const reason = options.mode === 'reason';
+  const password = options.mode === 'password';
   const required = reason || options.required;
-  const blocked = isPrompt && required && !value.trim();
+  const blocked =
+    isPrompt && (password ? value.length < 8 : required && !value.trim());
   const Control = reason ? Textarea : Input;
   return (
     <Modal
@@ -103,7 +105,7 @@ function Question({ request }: { request: Pending }) {
         className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!blocked) finish(value.trim());
+          if (!blocked) finish(password ? value : value.trim());
         }}
       >
         {isPrompt && (
@@ -112,16 +114,36 @@ function Question({ request }: { request: Pending }) {
               options.label ?? (reason ? ar.dialogs.reason : ar.dialogs.value)
             }
             required={required}
-            hint={reason ? ar.dialogs.reasonHint : undefined}
+            hint={
+              reason
+                ? ar.dialogs.reasonHint
+                : password
+                  ? ar.auth.passwordHint
+                  : undefined
+            }
           >
-            {(props) => (
-              <Control
-                {...props}
-                data-initial-focus
-                value={value}
-                onChange={(event) => setValue(event.currentTarget.value)}
-              />
-            )}
+            {(props) =>
+              password ? (
+                <Input
+                  {...props}
+                  data-initial-focus
+                  type="password"
+                  dir="ltr"
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={512}
+                  value={value}
+                  onChange={(event) => setValue(event.currentTarget.value)}
+                />
+              ) : (
+                <Control
+                  {...props}
+                  data-initial-focus
+                  value={value}
+                  onChange={(event) => setValue(event.currentTarget.value)}
+                />
+              )
+            }
           </Field>
         )}
         <div className="flex flex-wrap justify-end gap-2">

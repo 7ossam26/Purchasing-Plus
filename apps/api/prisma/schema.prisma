@@ -90,6 +90,13 @@ model Site {
   users     UserSite[]
 }
 
+model Settings {
+  id               Int    @id
+  rfqIntro          String
+  supplyOrderIntro  String
+  agingDays         Int    @default(3)
+}
+
 model AuditLog {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

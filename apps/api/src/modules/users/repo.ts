@@ -31,10 +31,43 @@ export async function findAccounts(
 ) {
   const items = await tx.user.findMany({
     where,
-    select: userSelect,
+    select: {
+      ...userSelect,
+      role: {
+        select: {
+          name: true,
+          siteScope: true,
+          permissions: { select: { key: true } },
+        },
+      },
+      sites: {
+        select: {
+          siteId: true,
+          site: { select: { name: true, isActive: true } },
+        },
+      },
+    },
     orderBy: { id: 'asc' },
     skip: (page - 1) * pageSize,
     take: pageSize,
   });
   return { items, total: await tx.user.count({ where }) };
+}
+
+export async function accountOptions(tx: Tx, siteIds?: number[]) {
+  const roles = await tx.role.findMany({
+    select: {
+      id: true,
+      name: true,
+      siteScope: true,
+      permissions: { select: { key: true } },
+    },
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+  });
+  const sites = await tx.site.findMany({
+    where: { id: siteIds ? { in: siteIds } : undefined },
+    select: { id: true, name: true, isActive: true },
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+  });
+  return { roles, sites };
 }

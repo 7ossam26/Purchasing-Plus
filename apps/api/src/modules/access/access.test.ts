@@ -85,6 +85,86 @@ beforeAll(async () => {
   empty = await login('empty');
 });
 afterAll(() => db.$disconnect());
+it('lets the seeded administrator assign a role and updates an existing session immediately', async () => {
+  const administratorRole = await db.role.findFirstOrThrow({
+    where: {
+      siteScope: 'ALL',
+      AND: ['roles.manage', 'users.manage', 'settings.manage'].map((key) => ({
+        permissions: { some: { key } },
+      })),
+    },
+  });
+  const admin = (
+    await call('post', '/users', root, {
+      name: 'اختبار الإدارة',
+      username: 'seeded-admin',
+      password: testPassword,
+      roleId: administratorRole.id,
+    }).expect(201)
+  ).body;
+  const session = await login('seeded-admin');
+  const role = (
+    await call('post', '/roles', session, {
+      name: 'متابعة المواقع',
+      siteScope: 'ASSIGNED',
+      keys: ['requests.view'],
+    }).expect(201)
+  ).body;
+  const options = (await call('get', '/users/options', session).expect(200))
+    .body;
+  expect(options.roles).toContainEqual({
+    id: role.id,
+    name: role.name,
+    siteScope: 'ASSIGNED',
+    assignable: true,
+  });
+  expect(options.sites).toContainEqual({ id: a, name: 'A', isActive: true });
+  const account = (
+    await call('post', '/users', session, {
+      name: 'اختبار الإسناد',
+      username: 'site-assignee',
+      password: testPassword,
+      roleId: role.id,
+      siteIds: [a],
+    }).expect(201)
+  ).body;
+  const assignee = await login('site-assignee');
+  const before = (await call('get', '/me', assignee).expect(200)).body;
+  expect(before.permissions).toEqual(['requests.view']);
+  await call('get', '/sites', assignee).expect(403);
+  const rows = (
+    await call(
+      'get',
+      '/users?roleId=' + role.id + '&siteId=' + a + '&active=true',
+      session,
+    ).expect(200)
+  ).body;
+  expect(rows.items).toEqual([
+    expect.objectContaining({
+      id: account.id,
+      canManage: true,
+      role: { name: role.name, siteScope: 'ASSIGNED' },
+      sites: [{ siteId: a, name: 'A', isActive: true }],
+    }),
+  ]);
+  await call('patch', '/roles/' + role.id, session, {
+    keys: ['masterData.view', 'sites.view'],
+  }).expect(200);
+  expect(
+    (await call('get', '/me', assignee).expect(200)).body.permissions,
+  ).toEqual(expect.arrayContaining(['masterData.view', 'sites.view']));
+  expect(
+    (await call('get', '/sites', assignee).expect(200)).body.items.map(
+      (site: { id: number }) => site.id,
+    ),
+  ).toEqual([a]);
+  await call('delete', '/roles/' + role.id, session).expect(409);
+  await call('patch', '/users/' + admin.id, session, { isActive: false })
+    .expect(403)
+    .expect((response) =>
+      expect(response.body.fix).toEqual(expect.any(String)),
+    );
+});
 it('checks session, origin, permission and validation at route boundaries', async () => {
   const routes: [Method, string][] = [
     ['get', '/users'],
@@ -429,6 +509,13 @@ it('ignores unknown and support-only keys stored on ordinary roles', async () =>
   const session = await login(account.username);
   expect((await call('get', '/me', session)).body.permissions).toEqual([]);
   await call('get', '/system/audit-log', session).expect(403);
+  const options = (await call('get', '/users/options', root).expect(200)).body;
+  expect(options.roles).toContainEqual(
+    expect.objectContaining({
+      id: account.roleId,
+      assignable: false,
+    }),
+  );
 });
 it('paginates role counts and never exposes unassignable keys', async () => {
   const result = await call('get', '/roles?page=1&pageSize=2', manager).expect(

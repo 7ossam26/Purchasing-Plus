@@ -3,6 +3,14 @@ import { roleInclude, type Tx } from '../access/repo.js';
 export function userHoldsRole(tx: Tx, id: number, roleId: number) {
   return tx.user.count({ where: { id, roleId } });
 }
+export async function heldRoleId(tx: Tx, id: number) {
+  return (
+    await tx.user.findUniqueOrThrow({
+      where: { id },
+      select: { roleId: true },
+    })
+  ).roleId;
+}
 export async function roleById(tx: Tx, id: number) {
   const role = await tx.role.findUnique({
     where: { id },

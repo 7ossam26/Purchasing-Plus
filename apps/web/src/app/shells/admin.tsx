@@ -33,6 +33,9 @@ function AdminItem({
   );
 }
 function AdminNavigation({ onNavigate }: { onNavigate?: () => void }) {
+  const sites = modules.find((item) => item.id === 'sites')!;
+  const masterData = modules.find((item) => item.path === sites.parent)!;
+  const canViewSites = useCanAny(sites.anyOf);
   return (
     <nav aria-label={ar.navigation.admin} className="grid gap-1">
       {modules
@@ -40,6 +43,12 @@ function AdminNavigation({ onNavigate }: { onNavigate?: () => void }) {
         .map((item) => (
           <AdminItem key={item.id} item={item} onNavigate={onNavigate} />
         ))}
+      {canViewSites && (
+        <div className="mt-3 border-t border-paper/20 pt-3">
+          <h3 className="px-3 text-small font-semibold">{masterData.label}</h3>
+          <AdminItem item={sites} onNavigate={onNavigate} />
+        </div>
+      )}
     </nav>
   );
 }

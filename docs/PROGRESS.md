@@ -89,3 +89,12 @@ Built the Cairo RTL theme, brand assets, three shells, login and account actions
 **Dependencies and verification.** `@fontsource-variable/cairo` bundles Cairo locally, `lucide-react` supplies the icons, and Sonner handles toasts. `pnpm --filter web icons` uses Sharp to regenerate the PNGs from the brand SVG. Lint, typecheck, 35 Vitest tests and the production web build passed. Chromium exercised real login/logout, return URLs, admin navigation, dialogs and the gallery at 360 px and 1440 px. The production bundle excludes the gallery route.
 
 **Deferred.** Registry destinations have guarded placeholders for later modules. The home inbox is reserved for P14.
+
+## P03 — Admin console (2026-11-20)
+
+Built the users, roles, role editor and settings screens in the Admin shell, plus the sites record manager at `/master-data/sites`. The account menu already called `POST /me/password`. The role editor uses the shared dependency closure and validator, and users see server guard messages with their recovery text.
+
+- **API and shared modules.** The settings migration adds a singleton seeded on API startup. `GET /api/v1/settings` requires a session and `PUT /api/v1/settings` requires `settings.manage`. Writes validate both message templates and the aging range, and audit the update in the same transaction. `GET /api/v1/users/options` supplies scoped sites and assignability flags for the users page. Shared validation and preview substitution live in `packages/shared/src/settings.ts`.
+- **Web modules.** Lazy routes in `apps/web/src/pages/admin/` use the module registry, shared Arabic copy, and existing controls. Copying a role replaces the editor's selected permissions with the source's grantable keys and retains the destination's name, description and scope. The Admin sidebar links to Sites under «التكويدات» pending the P05 hub tile.
+- **Verification.** Lint, typecheck, 57 Vitest tests, coverage gates and production builds passed. Chromium at 360 px verified site creation, role creation and assignment as the seeded administrator, and settings preview and save. The assignee's existing session gained site access on its next API request. Local database verification used isolated PostgreSQL 18 because Docker's engine was unavailable.
+- **Deferred.** The P05 master-data hub and P17 audit viewer remain later work. The record managers use database-assigned IDs on save. A guaranteed pre-save ID preview would require reserving an identifier when the form opens.

@@ -168,18 +168,37 @@ describe('session and protected routes', () => {
   it('refreshes permissions on navigation after the ten-second interval', async () => {
     const now = Date.now();
     let current = profile;
-    const { router, fetch } = setup('/', () => json(current));
+    const { router, fetch } = setup('/', (path) => {
+      if (path.endsWith('/me')) return json(current);
+      if (path.endsWith('/users/options'))
+        return json({ roles: [], sites: [] });
+      if (path.startsWith('/api/v1/users?'))
+        return json({ items: [], total: 0, page: 1, pageSize: 25 });
+      throw new Error('Unexpected request ' + path);
+    });
+    const profileRequests = () =>
+      fetch.mock.calls.filter(([path]) => path.endsWith('/me'));
     await screen.findByRole('heading', { name: ar.appName });
     await router.navigate('/admin/users');
     await screen.findByRole('heading', { name: 'المستخدمون' });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(profileRequests()).toHaveLength(1);
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/\/users\?/),
+        expect.anything(),
+      ),
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/users/options',
+      expect.anything(),
+    );
     vi.spyOn(Date, 'now').mockReturnValue(now + 20_000);
     current = { ...profile, permissions: [] };
     await router.navigate('/admin/users?page=2');
     expect(
       await screen.findByRole('heading', { name: ar.errors.denied }),
     ).toBeTruthy();
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(profileRequests()).toHaveLength(2);
   });
 });
 

@@ -2,6 +2,7 @@ import { hash } from '@node-rs/argon2';
 import * as s from '@purchasing-plus/shared';
 
 import {
+  allowed,
   assertSiteInScope,
   forbidden,
   missing,
@@ -9,9 +10,10 @@ import {
 import { AppError } from '../../middleware/errors.js';
 import type { Context } from '../access/endpoint.js';
 import { roleById } from '../roles/repo.js';
-import { assertGrant } from '../roles/service.js';
+import { assertGrant, canGrant } from '../roles/service.js';
 
 import {
+  accountOptions,
   activeSiteCount,
   findAccount,
   insertAccount,
@@ -30,7 +32,12 @@ async function grantRole(c: Context, id: number) {
 async function grantSites(c: Context, ids: number[]) {
   for (const id of ids) assertSiteInScope(c.viewer, id);
   if ((await activeSiteCount(c.tx, ids)) !== new Set(ids).size)
-    throw new AppError(422, 'INVALID_SITES', 'اختر مواقع نشطة موجودة');
+    throw new AppError(
+      422,
+      'INVALID_SITES',
+      'موقع غير متاح',
+      'اختار من المواقع النشطة المتاحة لحسابك.',
+    );
 }
 async function target(c: Context, support: boolean) {
   const id = s.pathId.parse(c.req.params.id);
@@ -58,6 +65,7 @@ export async function createAccount(c: Context, support: boolean) {
     passwordHash: await hash(data.password),
     isSuperadmin: support,
     roleId: grants?.roleId,
+    isActive: grants?.isActive,
     sites: {
       create: [...new Set(grants?.siteIds)].map((siteId) => ({ siteId })),
     },
@@ -79,9 +87,18 @@ export async function updateAccount(c: Context, support: boolean) {
     old.id === c.viewer.userId &&
     (siteIds || roleId || fields.isActive !== undefined)
   )
-    throw forbidden('لا يمكنك تغيير دورك أو مواقعك أو حالة حسابك');
+    throw forbidden(
+      'لا يمكنك تغيير دورك أو مواقعك أو حالة حسابك',
+      'اطلب من مسؤول آخر تعديل بيانات الوصول لحسابك.',
+    );
   if (roleId) await grantRole(c, roleId);
-  if (siteIds) await grantSites(c, siteIds);
+  if (siteIds) {
+    for (const id of siteIds) assertSiteInScope(c.viewer, id);
+    await grantSites(
+      c,
+      siteIds.filter((id) => !old.sites.some((site) => site.siteId === id)),
+    );
+  }
   if (
     support &&
     old.isActive &&
@@ -140,15 +157,50 @@ export async function listAccounts(c: Context, support: boolean) {
   };
   const { items, total } = await findAccounts(c.tx, where, page, pageSize);
   return {
-    items: items.map((u) => ({
-      ...u,
-      sites: u.sites.filter(
+    items: items.map(({ role, sites, ...u }) => {
+      const visibleSites = sites.filter(
         (s) =>
           c.viewer.siteScope === 'ALL' || c.viewer.siteIds.includes(s.siteId),
-      ),
-    })),
+      );
+      return {
+        ...u,
+        role: role && { name: role.name, siteScope: role.siteScope },
+        sites: visibleSites.map(({ siteId, site }) => ({ siteId, ...site })),
+        canManage:
+          !u.isSuperadmin &&
+          allowed(c.viewer, 'users.manage') &&
+          visibleSites.length === sites.length &&
+          role !== null &&
+          canGrant(
+            c.viewer,
+            role.siteScope,
+            role.permissions.map((p) => p.key),
+          ),
+      };
+    }),
     total,
     page,
     pageSize,
+  };
+}
+
+export async function userOptions({ tx, viewer, req }: Context) {
+  s.emptyInput.parse(req.query);
+  const { roles, sites } = await accountOptions(
+    tx,
+    viewer.siteScope === 'ALL' ? undefined : viewer.siteIds,
+  );
+  return {
+    roles: roles.map(({ permissions, ...role }) => ({
+      ...role,
+      assignable:
+        allowed(viewer, 'users.manage') &&
+        canGrant(
+          viewer,
+          role.siteScope,
+          permissions.map((p) => p.key),
+        ),
+    })),
+    sites,
   };
 }

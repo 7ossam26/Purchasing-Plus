@@ -31,6 +31,7 @@ export const editSupport = createSupport
 export const createUser = createSupport.extend({
   roleId: id,
   siteIds: z.array(id).default([]),
+  isActive: z.boolean().optional(),
 });
 export const editUser = createUser
   .omit({ password: true })
@@ -68,6 +69,12 @@ export const userFilters = pagination.extend({
     .enum(['true', 'false'])
     .transform((v) => v === 'true')
     .optional(),
+});
+export const siteFilters = userFilters.pick({
+  page: true,
+  pageSize: true,
+  search: true,
+  active: true,
 });
 export const auditFilters = pagination.extend({
   from: z.iso.datetime().optional(),

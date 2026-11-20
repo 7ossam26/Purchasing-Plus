@@ -25,8 +25,10 @@ export interface Viewer {
   siteIds: number[];
 }
 
-export const forbidden = (message = 'ليست لديك الصلاحية المطلوبة') =>
-  new AppError(403, 'FORBIDDEN', message);
+export const forbidden = (
+  message = 'ليست لديك الصلاحية المطلوبة',
+  fix?: string,
+) => new AppError(403, 'FORBIDDEN', message, fix);
 export const missing = () => new AppError(404, 'NOT_FOUND', 'السجل غير موجود');
 export function assertSiteInScope(v: Viewer, id: number) {
   if (!v.isSuperadmin && v.siteScope === 'ASSIGNED' && !v.siteIds.includes(id))

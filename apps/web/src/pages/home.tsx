@@ -9,8 +9,8 @@ import { EmptyState } from '../components/ui/states.js';
 
 export function HomePage() {
   const { profile } = useSession();
-  const available = modules.filter((item) =>
-    item.anyOf.some((key) => can(profile, key)),
+  const available = modules.filter(
+    (item) => !item.parent && item.anyOf.some((key) => can(profile, key)),
   );
   return (
     <section aria-labelledby="home-title" className="mx-auto max-w-5xl">

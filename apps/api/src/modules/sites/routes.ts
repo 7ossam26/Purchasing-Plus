@@ -9,12 +9,11 @@ export const sites = Router();
 sites.get(
   '/',
   ...endpoint(['sites.view'], async ({ tx, req, viewer }) => {
-    const { page, pageSize } = s.pagination.parse(req.query);
+    const filters = s.siteFilters.parse(req.query);
     return listSites(
       tx,
       viewer.siteScope === 'ALL' ? undefined : viewer.siteIds,
-      page,
-      pageSize,
+      filters,
     );
   }),
 );

@@ -1,0 +1,91 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  body {
+    @apply bg-plaster font-sans text-body text-ink;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ppr);
+    outline-offset: 3px;
+  }
+  ::selection {
+    background: var(--color-ppr-wash);
+    color: var(--color-ink);
+  }
+  input,
+  textarea {
+    caret-color: var(--color-ppr-deep);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-concrete);
+  }
+  button:not(:disabled),
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+}
+@utility numeric {
+  font-variant-numeric: tabular-nums;
+}
+@utility rtl-mirror {
+  &:dir(rtl) {
+    transform: scaleX(-1);
+  }
+}
+@utility chip-strip {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+[data-sonner-toast].ui-toast[data-styled='true'] {
+  font-family: var(--font-sans);
+  box-shadow: var(--shadow-overlay);
+}
+[data-sonner-toast].ui-toast [data-close-button]::before {
+  content: '';
+  position: absolute;
+  inset: -13px;
+  border-radius: 50%;
+}
+
+.ui-dialog[open] {
+  display: flex;
+}
+.ui-dialog::backdrop {
+  background: var(--color-backdrop);
+}
+.ui-dialog[open] > .ui-dialog-panel {
+  animation: sheet-in 200ms ease-out;
+}
+@media (width >= 640px) {
+  .ui-dialog[open] > .ui-dialog-panel {
+    animation: dialog-in 150ms ease-out;
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

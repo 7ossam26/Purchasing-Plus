@@ -64,3 +64,28 @@ All endpoints below use the `/api/v1` prefix. Mutations require the configured p
 **Dependencies and verification.** The API uses `@node-rs/argon2` for argon2id, `helmet` for security headers and `express-rate-limit` for the per-client login limit (40 requests per 15 minutes). Shared request schemas use Zod. Lint, typecheck, API build, 20 Vitest tests and coverage gates passed on an isolated PostgreSQL 18 database. The built API also passed bootstrap, login and profile checks over HTTP.
 
 **Deferred.** Catalog and settings seeds belong to their respective phases. Configure trusted proxy addresses at deployment so the login limiter and audit IP reflect the client behind the reverse proxy.
+
+## P02 — Web foundation (2026-11-20)
+
+Built the Cairo RTL theme, brand assets, three shells, login and account actions, permission guards, system pages and registry-driven home. The shared package exports Cairo formatters, namespaced Arabic copy and presentation metadata for request statuses, displayed stages, item states and urgency.
+
+| Primitive | Main props or interface |
+|---|---|
+| `Logo` | Inline mark and LTR-isolated wordmark |
+| `Button` | `variant`, `loading`, `iconOnly` and native button props |
+| `Field` | `label`, `hint`, `error`, `required` and a render function receiving accessible control props |
+| `Input`, `Textarea`, `Select`, `NumberInput` | Native props. NumberInput uses a decimal string `value` and `onValueChange`. |
+| `Modal` | `open`, `title`, `onClose`, optional `description`, `icon`, `drawer` and `dismissible`. Mark an element with `data-initial-focus` to focus it on open. |
+| `useConfirm`, `usePrompt` | Promise-based dialogs with a title, optional description, action label and tone. Prompts accept `mode: 'reason'` and return a string or `null`. |
+| `Toast`, `Chip`, `StatusChip` | One RTL Sonner host. Chips take `tone` and `icon`, status chips take `status` and optional `count`. |
+| `ChipSelect`, `SelectableCard`, `ToggleRow` | Controlled multi-select, radio selection and switch. All take labels and change handlers. |
+| `Tabs` | Controlled segments with content or route links, with optional tab counts. |
+| `Skeleton`, `EmptyState` | Skeleton takes a size class. EmptyState takes a title and optional description, icon and action. |
+| `DataTable`, `Pagination` | Table takes a caption, columns, rows, row key, state and recovery props, optional actions and dense mode. Pagination takes page, page size, total and change handler. |
+| `ActionBar`, `useLeaveGuard` | Bar takes primary, secondary and overflow actions, each with optional progress and a blocking reason. Leave guard takes the dirty flag. |
+
+**App contract.** `SessionProvider` reads P01's `/me` endpoint and refreshes quietly on navigation at 10-second intervals. Check `useCan(key)` and `useCanOnSite(key, siteId)` before rendering controls. Routes can wrap their content in `ProtectedRoute` with an `anyOf` permission list. Login restores the original local URL. The login page includes the 15-minute wait guidance alongside P01's generic credentials error. The standard shell reserves the notification slot for the inbox phase.
+
+**Dependencies and verification.** `@fontsource-variable/cairo` bundles Cairo locally, `lucide-react` supplies the icons, and Sonner handles toasts. `pnpm --filter web icons` uses Sharp to regenerate the PNGs from the brand SVG. Lint, typecheck, 35 Vitest tests and the production web build passed. Chromium exercised real login/logout, return URLs, admin navigation, dialogs and the gallery at 360 px and 1440 px. The production bundle excludes the gallery route.
+
+**Deferred.** Registry destinations have guarded placeholders for later modules. The home inbox is reserved for P14.

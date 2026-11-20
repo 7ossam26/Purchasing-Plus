@@ -1,22 +1,21 @@
 import { ar } from '@purchasing-plus/shared/i18n/ar';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 
-import { HomePage } from './pages/home.js';
-import './styles.css';
+import { createQueryClient } from './app/query.js';
+import { routes } from './app/routes.js';
+import '@fontsource-variable/cairo';
+import './styles/base.css';
 
-const router = createBrowserRouter([{ path: '/', element: <HomePage /> }]);
-const queryClient = new QueryClient();
 const root = document.getElementById('root');
-
 if (!root) throw new Error('Missing root element');
 document.title = ar.appName;
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+    <QueryClientProvider client={createQueryClient()}>
+      <RouterProvider router={createBrowserRouter(routes)} />
     </QueryClientProvider>
   </StrictMode>,
 );

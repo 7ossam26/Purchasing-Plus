@@ -3,7 +3,7 @@ import {
   type browseItemFilters,
   type catalogSearchFilters,
   type createCatalogItem,
-  type editCatalogItem,
+  type editCatalogItemInEditor,
 } from '@purchasing-plus/shared';
 import type { z } from 'zod';
 
@@ -17,14 +17,16 @@ import { AppError } from '../../middleware/errors.js';
 import type { Context } from '../access/endpoint.js';
 import type { Tx } from '../access/repo.js';
 import { findAttributes } from '../attributes/repo.js';
-import { breadcrumbs, pathIds } from '../catalog-tree/repo.js';
+import { effectiveAttributes, listAttributes } from '../attributes/service.js';
+import { breadcrumbs, findNode, pathIds } from '../catalog-tree/repo.js';
 import { activeNode, nodeWithBreadcrumb } from '../catalog-tree/service.js';
 import { activeUnit } from '../units/repo.js';
+import { listUnits } from '../units/service.js';
 
 import * as repo from './repo.js';
 
 type NewItem = z.infer<typeof createCatalogItem>;
-type ItemEdit = z.infer<typeof editCatalogItem>;
+type ItemEdit = z.infer<typeof editCatalogItemInEditor>;
 type Breadcrumb = ReturnType<Awaited<ReturnType<typeof breadcrumbs>>>;
 
 function toDto(row: repo.ItemRecord, nodePath: Breadcrumb) {
@@ -57,8 +59,23 @@ async function toDtos(tx: Tx, rows: repo.ItemRecord[]) {
   return rows.map((row) => toDto(row, crumb(row.node.path)));
 }
 
-function assertInactiveAccess(viewer: Viewer, includeInactive: boolean) {
+export function assertInactiveAccess(viewer: Viewer, includeInactive: boolean) {
   if (includeInactive && !allowed(viewer, 'masterData.view')) throw forbidden();
+}
+
+export async function editorChoices(
+  { tx, viewer }: Context,
+  nodeId: number,
+  page: number,
+  pageSize: number,
+) {
+  if (!allowed(viewer, 'catalog.create') && !allowed(viewer, 'catalog.edit'))
+    throw forbidden();
+  if (page > 1) await findNode(tx, nodeId);
+  const defaults = page === 1 ? await effectiveAttributes(tx, nodeId) : [];
+  const attributes = await listAttributes(tx, page, pageSize, true);
+  const units = await listUnits(tx, page, pageSize, true);
+  return { attributes, units, defaults };
 }
 
 export async function getItem(
@@ -82,11 +99,23 @@ export async function getItem(
 export async function listItems(
   { tx, viewer }: Context,
   id: number,
-  { page, pageSize, includeInactive }: z.infer<typeof browseItemFilters>,
+  {
+    page,
+    pageSize,
+    includeInactive,
+    active,
+  }: z.infer<typeof browseItemFilters>,
 ) {
   assertInactiveAccess(viewer, includeInactive);
   await nodeWithBreadcrumb(tx, id, !includeInactive);
-  const result = await repo.listItems(tx, id, page, pageSize, includeInactive);
+  const result = await repo.listItems(
+    tx,
+    id,
+    page,
+    pageSize,
+    includeInactive,
+    active,
+  );
   return { ...result, items: await toDtos(tx, result.items) };
 }
 
@@ -109,6 +138,7 @@ export async function search(
     input.page,
     input.pageSize,
     input.includeInactive,
+    input.active,
   );
   return { ...result, items: await toDtos(tx, result.items) };
 }
@@ -177,6 +207,8 @@ export async function addItem(
   ctx: Context,
   { attributeValues, ...input }: NewItem,
 ) {
+  if (input.isActive === false && !allowed(ctx.viewer, 'catalog.delete'))
+    throw forbidden();
   const node = await activeNode(ctx.tx, input.nodeId);
   const categoryId = pathIds(node.path)[0]!;
   const category = await nodeWithBreadcrumb(ctx.tx, categoryId);
@@ -212,7 +244,11 @@ export async function editItem(
   id: number,
   { attributeValues, ...input }: ItemEdit,
 ) {
+  if (input.isActive === false && !allowed(ctx.viewer, 'catalog.delete'))
+    throw forbidden();
   const before = await repo.findItem(ctx.tx, id);
+  if (input.nodeId !== undefined && input.nodeId !== before.nodeId)
+    await validateMove(ctx.tx, before.node.path, input.nodeId);
   if (input.unitId !== undefined && input.unitId !== before.unitId)
     await validateUnit(ctx.tx, input.unitId);
   const values =
@@ -220,7 +256,11 @@ export async function editItem(
   const after = await repo.updateItem(ctx.tx, id, input, values);
   return auditChange(
     ctx,
-    input.isActive ? 'activate' : 'update',
+    input.isActive !== undefined && input.isActive !== before.isActive
+      ? input.isActive
+        ? 'activate'
+        : 'deactivate'
+      : 'update',
     before,
     after,
   );
@@ -228,15 +268,19 @@ export async function editItem(
 
 export async function moveItem(ctx: Context, id: number, nodeId: number) {
   const before = await repo.findItem(ctx.tx, id);
-  const target = await activeNode(ctx.tx, nodeId);
-  if (pathIds(before.node.path)[0] !== pathIds(target.path)[0])
+  await validateMove(ctx.tx, before.node.path, nodeId);
+  const after = await repo.updateItem(ctx.tx, id, { nodeId });
+  return auditChange(ctx, 'move', before, after);
+}
+
+async function validateMove(tx: Tx, sourcePath: string, nodeId: number) {
+  const target = await activeNode(tx, nodeId);
+  if (pathIds(sourcePath)[0] !== pathIds(target.path)[0])
     throw new AppError(
       409,
       'CROSS_CATEGORY_MOVE',
       'النقل متاح داخل الفئة نفسها فقط',
     );
-  const after = await repo.updateItem(ctx.tx, id, { nodeId });
-  return auditChange(ctx, 'move', before, after);
 }
 
 export async function deactivateItem(ctx: Context, id: number) {

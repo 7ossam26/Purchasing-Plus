@@ -9,22 +9,48 @@ import * as service from './service.js';
 export const catalog = Router();
 catalog.get(
   '/categories',
-  ...endpoint(['catalog.view'], ({ tx, req }) => {
-    s.emptyInput.parse(req.query);
-    return listFolders(tx, null, undefined, true);
+  ...endpoint(['catalog.view'], ({ tx, req, viewer }) => {
+    const { includeInactive } = s.itemVisibility.parse(req.query);
+    service.assertInactiveAccess(viewer, includeInactive);
+    return listFolders(tx, null, undefined, !includeInactive);
   }),
 );
 catalog.get(
   '/nodes/:id',
-  ...endpoint(['catalog.view'], ({ tx, req }) =>
-    nodeWithBreadcrumb(tx, s.pathId.parse(req.params.id), true),
-  ),
+  ...endpoint(['catalog.view'], ({ tx, req, viewer }) => {
+    const { includeInactive } = s.itemVisibility.parse(req.query);
+    service.assertInactiveAccess(viewer, includeInactive);
+    return nodeWithBreadcrumb(
+      tx,
+      s.pathId.parse(req.params.id),
+      !includeInactive,
+    );
+  }),
 );
 catalog.get(
   '/nodes/:id/children',
-  ...endpoint(['catalog.view'], ({ tx, req }) =>
-    listFolders(tx, s.pathId.parse(req.params.id), undefined, true),
-  ),
+  ...endpoint(['catalog.view'], ({ tx, req, viewer }) => {
+    const { includeInactive } = s.itemVisibility.parse(req.query);
+    service.assertInactiveAccess(viewer, includeInactive);
+    return listFolders(
+      tx,
+      s.pathId.parse(req.params.id),
+      undefined,
+      !includeInactive,
+    );
+  }),
+);
+catalog.get(
+  '/nodes/:id/editor-choices',
+  ...endpoint(['catalog.view', 'masterData.view'], (ctx) => {
+    const { page, pageSize } = s.pagination.parse(ctx.req.query);
+    return service.editorChoices(
+      ctx,
+      s.pathId.parse(ctx.req.params.id),
+      page,
+      pageSize,
+    );
+  }),
 );
 catalog.get(
   '/nodes/:id/items',
@@ -77,6 +103,16 @@ catalog.post(
       ctx,
       s.pathId.parse(ctx.req.params.id),
       s.moveCatalogItem.parse(ctx.req.body).nodeId,
+    ),
+  ),
+);
+catalog.patch(
+  '/items/:id/editor',
+  ...endpoint(['catalog.edit'], (ctx) =>
+    service.editItem(
+      ctx,
+      s.pathId.parse(ctx.req.params.id),
+      s.editCatalogItemInEditor.parse(ctx.req.body),
     ),
   ),
 );

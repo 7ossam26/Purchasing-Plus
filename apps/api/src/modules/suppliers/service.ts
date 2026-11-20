@@ -7,11 +7,26 @@ import {
 } from '@purchasing-plus/shared';
 import type { z } from 'zod';
 
+import { allowed, forbidden } from '../../middleware/access.js';
 import { AppError } from '../../middleware/errors.js';
 import type { Context } from '../access/endpoint.js';
 import type { Tx } from '../access/repo.js';
+import { siblings } from '../catalog-tree/repo.js';
 
 import * as repo from './repo.js';
+
+export async function categoryChoices({ tx, viewer }: Context) {
+  if (
+    !allowed(viewer, 'suppliers.create') &&
+    !allowed(viewer, 'suppliers.edit')
+  )
+    throw forbidden();
+  return (await siblings(tx, null)).map(({ id, name, isActive }) => ({
+    id,
+    name,
+    isActive,
+  }));
+}
 
 function toDto({ categories, ...row }: repo.SupplierRecord) {
   return {
@@ -67,6 +82,8 @@ export async function addSupplier(
   ctx: Context,
   { whatsappNumber, categoryIds, ...input }: z.infer<typeof createSupplier>,
 ) {
+  if (input.isActive === false && !allowed(ctx.viewer, 'suppliers.delete'))
+    throw forbidden();
   await validateCategories(ctx.tx, categoryIds);
   const phone = await validatePhone(ctx.tx, whatsappNumber);
   const after = toDto(
@@ -83,12 +100,10 @@ export async function addSupplier(
 export async function editSupplier(
   ctx: Context,
   id: number,
-  {
-    whatsappNumber,
-    categoryIds,
-    ...input
-  }: Omit<z.infer<typeof editSupplierSchema>, 'isActive'> & { isActive?: boolean },
+  { whatsappNumber, categoryIds, ...input }: z.infer<typeof editSupplierSchema>,
 ) {
+  if (input.isActive === false && !allowed(ctx.viewer, 'suppliers.delete'))
+    throw forbidden();
   const before = await getSupplier(ctx.tx, id);
   if (categoryIds) await validateCategories(ctx.tx, categoryIds);
   const phone =

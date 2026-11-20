@@ -842,3 +842,175 @@ it('normalizes supplier phones, enforces unique numbers and lists only active su
   await send('delete', `/suppliers/${second.id}`).expect(200);
   await send('get', `/suppliers/${second.id}`).expect(404);
 });
+
+it('keeps inactive folder data and editor choices behind the management grants', async () => {
+  const root = await category('PUI');
+  const child = await group(root, 'مجلد موقوف');
+  const { body: definition } = await send('post', '/attributes', {
+    name: 'عرض المجلد',
+    type: 'NUMBER',
+    unitLabel: 'سم',
+  }).expect(201);
+  await send('put', '/nodes/' + root + '/attributes', {
+    attributeIds: [definition.id],
+  }).expect(200);
+  await send('post', tree + '/nodes/' + child + '/deactivate').expect(200);
+  await send('get', '/catalog/nodes/' + child, undefined, picker).expect(404);
+  await send(
+    'get',
+    '/catalog/nodes/' + child + '?includeInactive=true',
+    undefined,
+    picker,
+  ).expect(403);
+  await send(
+    'get',
+    '/catalog/categories?includeInactive=true',
+    undefined,
+    picker,
+  ).expect(403);
+  await send(
+    'get',
+    '/catalog/nodes/' + root + '/children?includeInactive=true',
+    undefined,
+    picker,
+  ).expect(403);
+  const folders = await send(
+    'get',
+    '/catalog/nodes/' + root + '/children?includeInactive=true',
+  ).expect(200);
+  expect(folders.body).toEqual([
+    expect.objectContaining({ id: child, isActive: false }),
+  ]);
+  const folder = await send(
+    'get',
+    '/catalog/nodes/' + child + '?includeInactive=true',
+  ).expect(200);
+  expect(folder.body.breadcrumb.map(({ id }: { id: number }) => id)).toEqual([
+    root,
+    child,
+  ]);
+  const choices = '/catalog/nodes/' + child + '/editor-choices';
+  await send('get', choices, undefined, picker).expect(403);
+  await send('get', choices + '?pageSize=101').expect(422);
+  await send('get', '/catalog/nodes/2147483647/editor-choices').expect(404);
+  const { body } = await send('get', choices).expect(200);
+  expect(body.defaults).toEqual([
+    expect.objectContaining({ id: definition.id, unitLabel: 'سم' }),
+  ]);
+  expect(body.units.items).toContainEqual(
+    expect.objectContaining({ id: pieceId }),
+  );
+  await send('get', '/suppliers/category-choices', undefined, picker).expect(
+    403,
+  );
+  const categories = await send('get', '/suppliers/category-choices').expect(
+    200,
+  );
+  expect(categories.body).toContainEqual(expect.objectContaining({ id: root }));
+  expect(categories.body).not.toContainEqual(
+    expect.objectContaining({ id: child }),
+  );
+});
+
+it('saves item changes, relocation and active status in one update', async () => {
+  const root = await category('PUE');
+  const other = await category('PUO');
+  const first = await group(root, 'أول');
+  const second = await group(root, 'ثاني');
+  const restrictedName = 'catalog-editor-only';
+  await makeUser(db, restrictedName, [
+    'catalog.edit',
+    'catalog.create',
+    'suppliers.edit',
+    'suppliers.create',
+  ]);
+  const restricted = await login(restrictedName);
+  const { body: item } = await send('post', '/catalog/items', {
+    name: 'كوع',
+    nodeId: first,
+    unitId: pieceId,
+  }).expect(201);
+  const editor = '/catalog/items/' + item.id + '/editor';
+  await send('patch', editor, { name: 'اسم آخر' }, picker).expect(403);
+  await send('patch', editor, { nodeId: 0 }).expect(422);
+  await send('patch', editor, { name: 'نقل ممنوع', nodeId: other }).expect(409);
+  await send(
+    'patch',
+    editor,
+    { name: 'اسم ممنوع', isActive: false },
+    restricted,
+  ).expect(403);
+  await send(
+    'post',
+    '/catalog/items',
+    { name: 'موقوف', nodeId: first, unitId: pieceId, isActive: false },
+    restricted,
+  ).expect(403);
+  const unchanged = await send('get', '/catalog/items/' + item.id).expect(200);
+  expect(unchanged.body).toMatchObject({
+    name: 'كوع',
+    nodeId: first,
+    isActive: true,
+  });
+  const saved = await send('patch', editor, {
+    name: 'كوع كبير',
+    nodeId: second,
+    isActive: false,
+  }).expect(200);
+  expect(saved.body).toMatchObject({
+    name: 'كوع كبير',
+    nodeId: second,
+    isActive: false,
+    code: item.code,
+  });
+  await send('get', '/catalog/items/' + item.id, undefined, picker).expect(404);
+  const stoppedItems = await send(
+    'get',
+    '/catalog/nodes/' + second + '/items?includeInactive=true&active=false',
+  ).expect(200);
+  expect(stoppedItems.body.items.map(({ id }: { id: number }) => id)).toEqual([
+    item.id,
+  ]);
+  expect(
+    (
+      await search(
+        root,
+        'كوع كبير',
+        manager,
+        '&includeInactive=true&active=true',
+      )
+    ).body.total,
+  ).toBe(0);
+  expect(
+    (
+      await search(
+        root,
+        'كوع كبير',
+        manager,
+        '&includeInactive=true&active=false',
+      )
+    ).body.items,
+  ).toHaveLength(1);
+  const supplier = {
+    name: 'مورد المجلد',
+    whatsappNumber: '01522224444',
+    categoryIds: [root],
+  };
+  await send(
+    'post',
+    '/suppliers',
+    { ...supplier, isActive: false },
+    restricted,
+  ).expect(403);
+  const created = await send('post', '/suppliers', supplier).expect(201);
+  await send(
+    'patch',
+    '/suppliers/' + created.body.id,
+    { isActive: false },
+    restricted,
+  ).expect(403);
+  const stopped = await send('patch', '/suppliers/' + created.body.id, {
+    isActive: false,
+  }).expect(200);
+  expect(stopped.body.isActive).toBe(false);
+});

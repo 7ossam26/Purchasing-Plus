@@ -125,8 +125,13 @@ export async function listItems(
   page: number,
   pageSize: number,
   includeInactive: boolean,
+  active?: boolean,
 ) {
-  const where = { nodeId, isActive: includeInactive ? undefined : true };
+  const where = {
+    nodeId,
+    isActive: includeInactive ? active : true,
+    ...(active === false && !includeInactive ? { id: { in: [] } } : {}),
+  };
   const items = await tx.catalogItem.findMany({
     where,
     include: itemInclude,
@@ -149,17 +154,22 @@ export async function searchItems(
   page: number,
   pageSize: number,
   includeInactive: boolean,
+  active?: boolean,
 ) {
   // LIKE can use the trigram index. Escape wildcard characters so user input stays literal.
   const pattern = '%' + q.replace(/[!%_]/g, '!$&') + '%';
   const visible = includeInactive
     ? Prisma.empty
     : Prisma.sql`AND i."isActive" AND ${visiblePath(Prisma.sql`n.path`)}`;
+  const status =
+    active === undefined
+      ? Prisma.empty
+      : Prisma.sql`AND i."isActive" = ${active}`;
   const matches = Prisma.sql`
     FROM "CatalogItem" i
     JOIN "CatalogNode" n ON n.id = i."nodeId"
     WHERE n.path LIKE ${path + '%'} AND i."searchText" ILIKE ${pattern} ESCAPE '!'
-      ${visible}
+      ${visible} ${status}
   `;
   const ids = await tx.$queryRaw<{ id: number }[]>(Prisma.sql`
     SELECT i.id ${matches}

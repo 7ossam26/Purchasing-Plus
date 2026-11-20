@@ -1,0 +1,136 @@
+.catalog-folder-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.catalog-drawer {
+  border: 1px solid var(--color-seam);
+  border-radius: var(--radius-control);
+  background: var(--color-paper);
+}
+.catalog-drawer:hover,
+.catalog-drawer:focus-within {
+  border-color: var(--color-concrete);
+}
+.catalog-drawer-inner {
+  display: flex;
+  align-items: center;
+  padding-inline-end: 0.25rem;
+}
+.catalog-drawer-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.625rem;
+  min-block-size: 62px;
+  padding: 0.25rem 0.625rem;
+}
+.catalog-folder-slot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 44px;
+  block-size: 44px;
+  border: 1px solid var(--color-seam);
+  border-radius: var(--radius-thumbnail);
+  background: var(--color-plaster);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-concrete);
+}
+.catalog-swatch > svg {
+  outline: 1px solid var(--color-seam);
+  outline-offset: 0.45rem;
+  border-radius: var(--radius-thumbnail);
+  background: var(--color-plaster);
+}
+@media (min-width: 40rem) {
+  .catalog-folder-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .catalog-drawer {
+    border-block-end-width: 3px;
+  }
+  .catalog-drawer-inner {
+    align-items: flex-end;
+  }
+  .catalog-drawer-link {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+  .catalog-folder-slot {
+    grid-column: 1 / -1;
+    inline-size: 62px;
+    block-size: 62px;
+  }
+}
+@media (min-width: 64rem) {
+  .catalog-folder-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (min-width: 80rem) {
+  .catalog-folder-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .catalog-folder-frame {
+    view-transition-name: catalog-folder;
+  }
+  .catalog-current-crumb {
+    view-transition-name: catalog-crumb;
+  }
+
+  :root:has(.catalog-explorer) {
+    --catalog-enter: -24px;
+    --catalog-exit: 24px;
+  }
+  :root:has(.catalog-explorer[data-folder-back]) {
+    --catalog-enter: 24px;
+    --catalog-exit: -24px;
+  }
+  :root:has(.catalog-explorer)::view-transition-group(catalog-folder),
+  :root:has(.catalog-explorer)::view-transition-group(catalog-crumb) {
+    animation-duration: 180ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  :root:has(.catalog-explorer)::view-transition-old(root),
+  :root:has(.catalog-explorer)::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+  ::view-transition-old(catalog-folder),
+  ::view-transition-old(catalog-crumb) {
+    animation: catalog-exit 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  ::view-transition-new(catalog-folder),
+  ::view-transition-new(catalog-crumb) {
+    animation: catalog-enter 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
+@keyframes catalog-exit {
+  to {
+    opacity: 0;
+    transform: translateX(var(--catalog-exit));
+  }
+}
+@keyframes catalog-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--catalog-enter));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0s !important;
+  }
+}

@@ -31,6 +31,7 @@ export interface ModalProps {
   children: ReactNode;
   onClose: () => void;
   drawer?: boolean;
+  workspace?: boolean;
   dismissible?: boolean;
 }
 export function Modal({ open, ...props }: ModalProps) {
@@ -43,6 +44,7 @@ function Dialog({
   children,
   onClose,
   drawer,
+  workspace,
   dismissible = true,
 }: Omit<ModalProps, 'open'>) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -130,7 +132,7 @@ function Dialog({
       }}
     >
       <section
-        className={`ui-dialog-panel flex min-w-0 flex-col overflow-hidden shadow-overlay ${drawer ? 'h-full w-[min(86vw,320px)] bg-ink text-paper' : 'max-h-[90dvh] w-full rounded-t-sheet bg-paper sm:max-w-lg sm:rounded-panel'}`}
+        className={`ui-dialog-panel flex min-w-0 flex-col overflow-hidden shadow-overlay ${drawer ? 'h-full w-[min(86vw,320px)] bg-ink text-paper' : workspace ? 'h-dvh w-full bg-paper sm:h-auto sm:max-h-[90dvh] sm:max-w-4xl sm:rounded-panel' : 'max-h-[90dvh] w-full rounded-t-sheet bg-paper sm:max-w-lg sm:rounded-panel'}`}
       >
         <header
           className={`flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-6 ${drawer ? 'border-paper/20' : 'border-seam'}`}
@@ -156,7 +158,7 @@ function Dialog({
             </Button>
           )}
         </header>
-        <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
           {description && (
             <p
               id={descriptionId}

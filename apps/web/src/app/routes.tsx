@@ -39,6 +39,9 @@ const modulePages: Partial<Record<string, RouteObject['lazy']>> = {
   sites: async () => ({
     Component: (await import('../pages/admin/sites.js')).SitesPage,
   }),
+  masterData: async () => ({
+    Component: (await import('../pages/master-data/hub.js')).MasterDataPage,
+  }),
 };
 const childPages: Partial<Record<string, RouteObject['lazy']>> = {
   'roles/new': async () => ({
@@ -90,6 +93,135 @@ function moduleRoutes(): RouteObject[] {
     };
   });
 }
+const masterDataRoutes: RouteObject[] = [
+  {
+    element: <ProtectedRoute anyOf={['masterData.view']} />,
+    children: [
+      {
+        element: <ProtectedRoute anyOf={['catalog.view']} />,
+        children: [
+          {
+            path: '/catalog',
+            element: <StandardShell />,
+            children: [
+              {
+                index: true,
+                lazy: async () => ({
+                  Component: (await import('../pages/master-data/catalog.js'))
+                    .CatalogPage,
+                }),
+              },
+              {
+                path: 'node/:nodeId',
+                lazy: async () => ({
+                  Component: (await import('../pages/master-data/catalog.js'))
+                    .CatalogPage,
+                }),
+                children: [
+                  {
+                    path: 'new',
+                    element: <ProtectedRoute anyOf={['catalog.create']} />,
+                    children: [
+                      {
+                        index: true,
+                        lazy: async () => ({
+                          Component: (
+                            await import('../pages/master-data/catalog.js')
+                          ).NewItemPage,
+                        }),
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                path: 'item/:itemId',
+                lazy: async () => ({
+                  Component: (await import('../pages/master-data/catalog.js'))
+                    .ItemPage,
+                }),
+                children: [
+                  {
+                    path: 'edit',
+                    element: <ProtectedRoute anyOf={['catalog.edit']} />,
+                    children: [
+                      {
+                        index: true,
+                        lazy: async () => ({
+                          Component: (
+                            await import('../pages/master-data/catalog.js')
+                          ).EditItemPage,
+                        }),
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        element: <StandardShell />,
+        children: [
+          {
+            path: '/master-data/tree',
+            element: <ProtectedRoute anyOf={['catalogTree.view']} />,
+            children: [
+              {
+                index: true,
+                lazy: async () => ({
+                  Component: (await import('../pages/master-data/tree.js'))
+                    .TreePage,
+                }),
+              },
+            ],
+          },
+          {
+            path: '/master-data/attributes',
+            element: <ProtectedRoute anyOf={['attributes.view']} />,
+            children: [
+              {
+                index: true,
+                lazy: async () => ({
+                  Component: (
+                    await import('../pages/master-data/attributes.js')
+                  ).AttributesPage,
+                }),
+              },
+            ],
+          },
+          {
+            path: '/master-data/units',
+            element: <ProtectedRoute anyOf={['units.view']} />,
+            children: [
+              {
+                index: true,
+                lazy: async () => ({
+                  Component: (await import('../pages/master-data/units.js'))
+                    .UnitsPage,
+                }),
+              },
+            ],
+          },
+          {
+            path: '/master-data/suppliers',
+            element: <ProtectedRoute anyOf={['suppliers.view']} />,
+            children: [
+              {
+                index: true,
+                lazy: async () => ({
+                  Component: (await import('../pages/master-data/suppliers.js'))
+                    .SuppliersPage,
+                }),
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
 export const routes: RouteObject[] = [
   {
     element: <AppProviders />,
@@ -121,6 +253,7 @@ export const routes: RouteObject[] = [
         ],
       },
       ...moduleRoutes(),
+      ...masterDataRoutes,
       ...(import.meta.env.DEV
         ? [{ path: '/dev/ui', lazy: () => import('../pages/dev-ui.js') }]
         : []),

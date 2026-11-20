@@ -29,7 +29,9 @@ export const nodeListFilters = z.strictObject({ active: active.optional() });
 export const itemVisibility = z.strictObject({
   includeInactive: active.default(false),
 });
-export const browseItemFilters = catalogPagination.extend(itemVisibility.shape);
+export const browseItemFilters = catalogListFilters.extend(
+  itemVisibility.shape,
+);
 export const catalogSearchFilters = browseItemFilters.extend({
   categoryId: pathId,
   q: text.max(200).transform(normalizeArabic).pipe(z.string().min(1)),
@@ -111,15 +113,18 @@ export const createCatalogItem = z.strictObject({
   unitId: id,
   description: description.default(''),
   attributeValues: attributeValues.default([]),
+  isActive: z.literal(false).optional(),
 });
-export const editCatalogItem = z
-  .strictObject({
-    name: name.optional(),
-    unitId: id.optional(),
-    description: description.optional(),
-    attributeValues: attributeValues.optional(),
-    isActive: z.literal(true).optional(),
-  })
+const catalogItemEdit = z.strictObject({
+  name: name.optional(),
+  unitId: id.optional(),
+  description: description.optional(),
+  attributeValues: attributeValues.optional(),
+  isActive: z.literal(true).optional(),
+});
+export const editCatalogItem = catalogItemEdit.refine(changes);
+export const editCatalogItemInEditor = catalogItemEdit
+  .extend({ nodeId: id.optional(), isActive: z.boolean().optional() })
   .refine(changes);
 export const moveCatalogItem = z.strictObject({ nodeId: id });
 
@@ -129,13 +134,14 @@ export const createSupplier = z.strictObject({
   whatsappNumber: z.string().max(100),
   categoryIds: uniqueIds.refine((ids) => ids.length > 0),
   notes: description.default(''),
+  isActive: z.literal(false).optional(),
 });
 export const editSupplier = createSupplier
   .partial()
   .extend({
     contactPerson: contactPerson.optional(),
     notes: description.optional(),
-    isActive: z.literal(true).optional(),
+    isActive: z.boolean().optional(),
   })
   .refine(changes);
 export const supplierFilters = catalogListFilters

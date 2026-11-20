@@ -13,6 +13,13 @@ suppliers.get(
   ),
 );
 suppliers.get(
+  '/category-choices',
+  ...endpoint(['suppliers.view'], (ctx) => {
+    s.emptyInput.parse(ctx.req.query);
+    return service.categoryChoices(ctx);
+  }),
+);
+suppliers.get(
   '/:id',
   ...endpoint(['suppliers.view'], ({ tx, req }) =>
     service.getSupplier(tx, s.pathId.parse(req.params.id)),

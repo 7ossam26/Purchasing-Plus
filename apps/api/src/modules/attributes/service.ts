@@ -24,6 +24,7 @@ export async function addAttribute(
   const row = await repo.createAttribute(ctx.tx, {
     name,
     type,
+    clientVisible: input.clientVisible,
     unitLabel: type === 'NUMBER' ? input.unitLabel : null,
     options:
       type === 'SELECT'

@@ -1,4 +1,5 @@
 import { createAttribute, editAttribute } from '@purchasing-plus/shared';
+import { catalogImages as imageCopy } from '@purchasing-plus/shared/i18n/ar';
 import { admin, ar, masterData as copy } from '@purchasing-plus/shared/i18n/ar';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
@@ -83,6 +84,7 @@ function AttributeForm({ row, ...props }: FormProps<Attribute>) {
         const base = {
           name,
           type,
+          clientVisible: fields.get('clientVisible') === 'on',
           ...(type === 'NUMBER' ? { unitLabel: unit.trim() || null } : {}),
         };
         const result = row
@@ -112,6 +114,20 @@ function AttributeForm({ row, ...props }: FormProps<Attribute>) {
       {(errors) => (
         <>
           <NameField row={row} error={errors.name} />
+          <label className="flex min-h-11 items-center gap-3 rounded-control border border-seam p-3">
+            <input
+              type="checkbox"
+              name="clientVisible"
+              defaultChecked={row?.clientVisible}
+              className="size-5 accent-ppr"
+            />
+            <span>
+              {imageCopy.clientVisible}
+              <small className="block text-concrete">
+                {imageCopy.clientHint}
+              </small>
+            </span>
+          </label>
           <Field label={copy.type} required>
             {(props) => (
               <Select

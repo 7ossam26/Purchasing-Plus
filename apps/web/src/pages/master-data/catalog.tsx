@@ -12,7 +12,9 @@ import {
 import { useCan } from '../../app/session.js';
 import { LoadRecord } from '../../components/shared/record-feedback.js';
 import { buttonClass } from '../../components/ui/button.js';
+import { Carousel } from '../../features/catalog/Carousel.js';
 import { CatalogActions } from '../../features/catalog/CatalogActions.js';
+import { ClientPresentation } from '../../features/catalog/ClientPresentation.js';
 import { Explorer } from '../../features/catalog/Explorer.js';
 import { ItemEditor } from '../../features/catalog/ItemEditor.js';
 import {
@@ -26,22 +28,27 @@ import {
 import { catalogApi } from '../../lib/api/catalog.js';
 
 export function CatalogPage() {
+  const manage = useCan('masterData.view');
   return (
     <>
-      <Explorer mode="manage" />
+      <Explorer mode={manage ? 'manage' : 'browse'} />
       <Outlet />
     </>
   );
 }
 function useItem(itemId: number) {
+  const manage = useCan('masterData.view');
   return useQuery({
-    queryKey: ['master-data', 'item', itemId],
-    queryFn: ({ signal }) => catalogApi.item(itemId, true, signal),
+    queryKey: manage
+      ? ['master-data', 'item', itemId]
+      : ['master-data', 'item', itemId, 'active'],
+    queryFn: ({ signal }) => catalogApi.item(itemId, manage, signal),
   });
 }
 export function ItemPage() {
   const { itemId } = useParams();
   const query = useItem(Number(itemId));
+  const manage = useCan('masterData.view');
   const prices = useCan('requests.viewPrices');
   return (
     <>
@@ -57,8 +64,16 @@ export function ItemPage() {
               <bdi className="wrap-anywhere">{pathLabel(item.nodePath)}</bdi>
             </Link>
             <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-              <div role="img" aria-label={copy.imageArea}>
-                <SamplePlaceholder large />
+              <div className="min-w-0">
+                {item.images?.length ? (
+                  <Carousel images={item.images} name={item.name} />
+                ) : (
+                  <SamplePlaceholder
+                    name={item.name}
+                    icon={item.categoryIcon}
+                    large
+                  />
+                )}
               </div>
               <div className="min-w-0 rounded-panel border border-seam bg-paper p-4 sm:p-6">
                 <header className="flex items-start justify-between gap-2">
@@ -70,9 +85,12 @@ export function ItemPage() {
                       {item.code}
                     </bdi>
                   </div>
-                  <CatalogActions item={item} />
+                  {manage && <CatalogActions item={item} />}
                 </header>
                 <Stopped active={item.isActive} />
+                <div className="my-3">
+                  <ClientPresentation item={item} />
+                </div>
                 {item.description && (
                   <p className="my-3 whitespace-pre-wrap wrap-anywhere">
                     {item.description}

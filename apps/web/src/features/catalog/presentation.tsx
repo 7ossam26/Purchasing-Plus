@@ -5,7 +5,6 @@ import {
   Droplet,
   Folder as FolderIcon,
   Grid2X2,
-  Package,
   PaintRoller,
   Zap,
 } from 'lucide-react';
@@ -51,13 +50,39 @@ export function attributeLabel({
     formatNumber(value) + (attribute.unitLabel ? ' ' + attribute.unitLabel : '')
   );
 }
-export function SamplePlaceholder({ large = false }: { large?: boolean }) {
+export function SamplePlaceholder({
+  name,
+  icon,
+  large = false,
+}: {
+  name: string;
+  icon?: string | null;
+  large?: boolean;
+}) {
   return (
     <span
       aria-hidden="true"
-      className="catalog-swatch grid aspect-square place-items-center rounded-thumbnail border border-seam bg-plaster text-concrete"
+      className="grid aspect-square place-items-center rounded-thumbnail border border-seam bg-plaster text-concrete"
     >
-      <Package size={large ? 46 : 31} strokeWidth={1.25} />
+      <span className="grid justify-items-center gap-2">
+        <CategoryIcon name={icon} size={large ? 36 : 22} />
+        <bdi className={large ? 'text-title' : 'text-small font-semibold'}>
+          {[...name.trim()].slice(0, 2).join('')}
+        </bdi>
+      </span>
     </span>
+  );
+}
+export function SampleCover({ item }: { item: CatalogItem }) {
+  const cover = item.images?.find((image) => image.isCover);
+  return cover ? (
+    <img
+      className="aspect-square w-full rounded-thumbnail border border-seam bg-plaster object-cover"
+      src={cover.thumbUrl}
+      loading="lazy"
+      alt=""
+    />
+  ) : (
+    <SamplePlaceholder name={item.name} icon={item.categoryIcon} />
   );
 }

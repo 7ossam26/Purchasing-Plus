@@ -35,7 +35,17 @@ export interface AttributeOption {
 export interface Attribute extends NamedRecord {
   type: 'TEXT' | 'NUMBER' | 'SELECT';
   unitLabel: string | null;
+  clientVisible?: boolean;
   options: AttributeOption[];
+}
+export interface CatalogImage {
+  id: number;
+  thumbUrl: string;
+  displayUrl: string;
+  width: number;
+  height: number;
+  order: number;
+  isCover: boolean;
 }
 export interface CatalogItem extends NamedRecord {
   code: string;
@@ -51,6 +61,8 @@ export interface CatalogItem extends NamedRecord {
     option: AttributeOption | null;
   }[];
   latestPrice?: null;
+  categoryIcon?: string | null;
+  images?: CatalogImage[];
 }
 export interface FolderContents {
   node: CatalogNode;

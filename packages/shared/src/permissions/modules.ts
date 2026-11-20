@@ -1,3 +1,5 @@
+import { masterData as copy } from '../i18n/ar.js';
+
 import type { PermissionKey } from './registry.js';
 interface Module {
   id: string;
@@ -11,6 +13,15 @@ interface Module {
   children?: { path: string; anyOf: PermissionKey[] }[];
 }
 export const modules: Module[] = [
+  {
+    id: 'catalog',
+    label: copy.items,
+    description: copy.itemsDescription,
+    icon: 'Package',
+    path: '/catalog',
+    kind: 'operations',
+    anyOf: ['catalog.view'],
+  },
   {
     id: 'users',
     label: 'المستخدمون',

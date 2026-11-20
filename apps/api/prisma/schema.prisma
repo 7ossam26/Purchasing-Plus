@@ -128,16 +128,17 @@ enum CatalogAttributeType {
 }
 
 model AttributeDefinition {
-  id        Int                         @id @default(autoincrement())
-  createdAt DateTime                    @default(now())
-  updatedAt DateTime                    @updatedAt
-  name      String                      @unique
-  type      CatalogAttributeType
-  unitLabel String?
-  isActive  Boolean                     @default(true)
-  options   AttributeOption[]
-  nodes     NodeAttribute[]
-  values    CatalogItemAttributeValue[]
+  id            Int                         @id @default(autoincrement())
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  name          String                      @unique
+  type          CatalogAttributeType
+  unitLabel     String?
+  clientVisible Boolean                     @default(false)
+  isActive      Boolean                     @default(true)
+  options       AttributeOption[]
+  nodes         NodeAttribute[]
+  values        CatalogItemAttributeValue[]
 
   @@index([isActive, name])
 }
@@ -198,6 +199,7 @@ model CatalogItem {
   unit            Unit                        @relation(fields: [unitId], references: [id], onDelete: Restrict)
   attributeValues CatalogItemAttributeValue[]
   prices          CatalogItemPrice[]
+  images          CatalogItemImage[]
 
   @@index([nodeId, name, id])
   @@index([unitId])
@@ -299,4 +301,21 @@ model AuditLog {
   @@index([createdAt])
   @@index([action])
   @@index([entity])
+}
+
+model CatalogItemImage {
+  id            Int         @id @default(autoincrement())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  itemId        Int
+  item          CatalogItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  thumbKey      String      @unique
+  displayKey    String      @unique
+  width         Int
+  height        Int
+  sortOrder     Int
+  isCover       Boolean     @default(false)
+  pendingDelete Boolean     @default(false)
+
+  @@index([itemId, sortOrder, id])
 }

@@ -3,7 +3,12 @@ import {
   createCatalogItem,
   editCatalogItemInEditor,
 } from '@purchasing-plus/shared';
-import { admin, ar, masterData as copy } from '@purchasing-plus/shared/i18n/ar';
+import {
+  admin,
+  ar,
+  catalogImages as imageCopy,
+  masterData as copy,
+} from '@purchasing-plus/shared/i18n/ar';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { useEffect, useState, type SubmitEvent } from 'react';
@@ -32,6 +37,7 @@ import {
   type NamedRecord,
 } from '../../lib/api/catalog.js';
 
+import { ImageManager } from './ImageManager.js';
 import { NodePicker } from './NodePicker.js';
 import { pathLabel } from './presentation.js';
 
@@ -51,6 +57,7 @@ type EditorProps = {
 export function ItemEditor(props: EditorProps) {
   const { item, nodeId, onClose } = props;
   const [busy, setBusy] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
   const query = useQuery({
     queryKey: ['master-data', 'editor', nodeId],
     queryFn: async ({ signal }) => {
@@ -66,7 +73,7 @@ export function ItemEditor(props: EditorProps) {
       workspace
       open
       title={item ? copy.editItem : copy.addItem}
-      dismissible={!busy}
+      dismissible={!busy && !imageBusy}
       onClose={onClose}
     >
       <LoadRecord query={query}>
@@ -76,6 +83,8 @@ export function ItemEditor(props: EditorProps) {
             choices={choices}
             initialPath={path}
             onBusy={setBusy}
+            imageBusy={imageBusy}
+            onImageBusy={setImageBusy}
           />
         )}
       </LoadRecord>
@@ -110,12 +119,16 @@ function ItemForm({
   item,
   choices,
   initialPath,
+  imageBusy,
+  onImageBusy,
   onBusy,
   onClose,
   onSaved,
 }: EditorProps & {
   choices: Choices;
   initialPath: NamedRecord[];
+  imageBusy: boolean;
+  onImageBusy: (busy: boolean) => void;
   onBusy: (busy: boolean) => void;
 }) {
   const canDeactivate = useCan('catalog.delete');
@@ -200,7 +213,7 @@ function ItemForm({
 
   async function save(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (change.isPending || relocate.isPending || saved) return;
+    if (imageBusy || change.isPending || relocate.isPending || saved) return;
     const form = new FormData(event.currentTarget);
     const invalid: Record<string, string> = {};
     const name = String(form.get('name') ?? '').trim();
@@ -259,7 +272,13 @@ function ItemForm({
       <form
         className="grid gap-5"
         noValidate
-        onChange={() => setDirty(true)}
+        onChange={(event) => {
+          if (!(
+            event.target instanceof HTMLInputElement &&
+            event.target.type === 'file'
+          ))
+            setDirty(true);
+        }}
         onSubmit={(event) => void save(event)}
       >
         <div className="grid gap-3 sm:grid-cols-2">
@@ -464,6 +483,15 @@ function ItemForm({
         ) : (
           item && <p className="text-small text-concrete">{admin.active}</p>
         )}
+        {item ? (
+          <ImageManager
+            item={item}
+            onBusy={onImageBusy}
+            disabled={change.isPending || relocate.isPending}
+          />
+        ) : (
+          <p className="text-small text-concrete">{imageCopy.chooseFirst}</p>
+        )}
         <InlineError
           error={change.error ?? relocate.error}
           retry={relocate.error ? () => setPick(true) : undefined}
@@ -472,13 +500,13 @@ function ItemForm({
           <Button
             type="submit"
             loading={change.isPending}
-            disabled={relocate.isPending}
+            disabled={imageBusy || relocate.isPending}
           >
             {item ? admin.saveChanges : ar.common.save}
           </Button>
           <Button
             variant="secondary"
-            disabled={change.isPending}
+            disabled={imageBusy || change.isPending}
             onClick={onClose}
           >
             {ar.common.cancel}

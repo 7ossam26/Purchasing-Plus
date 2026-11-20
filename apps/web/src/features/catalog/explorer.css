@@ -134,3 +134,28 @@
     animation-duration: 0s !important;
   }
 }
+.catalog-folder-stack {
+  position: relative;
+  border-color: transparent;
+  background: transparent;
+}
+.catalog-folder-stack img {
+  position: absolute;
+  inset-block-start: calc(14% - var(--stack-offset, 0%));
+  inset-inline-start: calc(10% + var(--stack-offset, 0%));
+  inline-size: 78%;
+  block-size: 78%;
+  border: 1px solid var(--color-seam);
+  border-radius: var(--radius-thumbnail);
+  background: var(--color-paper);
+  object-fit: cover;
+  z-index: var(--stack-layer, 3);
+}
+.catalog-folder-stack img[data-layer='1'] {
+  --stack-offset: 7%;
+  --stack-layer: 2;
+}
+.catalog-folder-stack img[data-layer='2'] {
+  --stack-offset: 14%;
+  --stack-layer: 1;
+}

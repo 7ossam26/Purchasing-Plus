@@ -9,10 +9,10 @@ import * as service from './service.js';
 export const catalog = Router();
 catalog.get(
   '/categories',
-  ...endpoint(['catalog.view'], ({ tx, req, viewer }) => {
-    const { includeInactive } = s.itemVisibility.parse(req.query);
-    service.assertInactiveAccess(viewer, includeInactive);
-    return listFolders(tx, null, undefined, !includeInactive);
+  ...endpoint(['catalog.view'], (ctx) => {
+    const { includeInactive } = s.itemVisibility.parse(ctx.req.query);
+    service.assertInactiveAccess(ctx.viewer, includeInactive);
+    return listFolders(ctx, null, undefined, !includeInactive);
   }),
 );
 catalog.get(
@@ -29,12 +29,12 @@ catalog.get(
 );
 catalog.get(
   '/nodes/:id/children',
-  ...endpoint(['catalog.view'], ({ tx, req, viewer }) => {
-    const { includeInactive } = s.itemVisibility.parse(req.query);
-    service.assertInactiveAccess(viewer, includeInactive);
+  ...endpoint(['catalog.view'], (ctx) => {
+    const { includeInactive } = s.itemVisibility.parse(ctx.req.query);
+    service.assertInactiveAccess(ctx.viewer, includeInactive);
     return listFolders(
-      tx,
-      s.pathId.parse(req.params.id),
+      ctx,
+      s.pathId.parse(ctx.req.params.id),
       undefined,
       !includeInactive,
     );

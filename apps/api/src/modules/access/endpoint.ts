@@ -16,6 +16,8 @@ export type Context = {
   tx: Tx;
   req: Request;
   viewer: Viewer;
+  onRollback: (handler: () => Promise<unknown>) => void;
+  onCommit: (handler: () => Promise<unknown>) => void;
   audit: (
     action: string,
     entity: string,
@@ -29,12 +31,16 @@ export function endpoint(
   handler: (ctx: Context) => Promise<unknown>,
   status = 200,
   afterCommit?: (response: Response) => void,
+  prepare?: RequestHandler,
 ): RequestHandler[] {
   return [
     requireSession,
     requirePermission(...keys),
+    ...(prepare ? [prepare] : []),
     async (req, res) => {
       const write = !['HEAD', 'GET'].includes(req.method);
+      const rollback: (() => Promise<unknown>)[] = [];
+      const commit: (() => Promise<unknown>)[] = [];
       const result = await accessTransaction(
         req.app.locals.db,
         write,
@@ -52,6 +58,8 @@ export function endpoint(
             tx,
             req,
             viewer,
+            onRollback: (handler) => rollback.push(handler),
+            onCommit: (handler) => commit.push(handler),
             audit: (action, entity, id, oldValue, newValue) =>
               writeAudit(
                 tx,
@@ -66,7 +74,15 @@ export function endpoint(
               ),
           });
         },
-      );
+      ).catch(async (error) => {
+        const cleanup = await Promise.allSettled(
+          rollback.map((handler) => handler()),
+        );
+        if (cleanup.some((result) => result.status === 'rejected'))
+          console.error('Upload rollback failed');
+        throw error;
+      });
+      for (const handler of commit) await handler();
       afterCommit?.(res);
       res.status(status).json(result);
     },

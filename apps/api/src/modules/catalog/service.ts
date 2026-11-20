@@ -7,6 +7,7 @@ import {
 } from '@purchasing-plus/shared';
 import type { z } from 'zod';
 
+import type { StorageDriver } from '../../lib/storage.js';
 import {
   allowed,
   forbidden,
@@ -18,6 +19,7 @@ import type { Context } from '../access/endpoint.js';
 import type { Tx } from '../access/repo.js';
 import { findAttributes } from '../attributes/repo.js';
 import { effectiveAttributes, listAttributes } from '../attributes/service.js';
+import { imageUrls } from '../catalog-images/service.js';
 import { breadcrumbs, findNode, pathIds } from '../catalog-tree/repo.js';
 import { activeNode, nodeWithBreadcrumb } from '../catalog-tree/service.js';
 import { activeUnit } from '../units/repo.js';
@@ -40,6 +42,7 @@ function toDto(row: repo.ItemRecord, nodePath: Breadcrumb) {
     updatedAt: row.updatedAt,
     nodeId: row.nodeId,
     nodePath,
+    categoryIcon: nodePath[0]?.iconKey ?? null,
     unitId: row.unitId,
     unit: row.unit,
     attributeValues: row.attributeValues.map((value) => ({
@@ -48,6 +51,19 @@ function toDto(row: repo.ItemRecord, nodePath: Breadcrumb) {
       value: repo.itemValue(value),
       option: value.option,
     })),
+  };
+}
+
+async function attachImages<T>(
+  dto: T,
+  row: repo.ItemRecord,
+  storage: StorageDriver,
+) {
+  return {
+    ...dto,
+    images: await Promise.all(
+      row.images.map((image) => imageUrls(image, storage)),
+    ),
   };
 }
 
@@ -79,25 +95,26 @@ export async function editorChoices(
 }
 
 export async function getItem(
-  { tx, viewer }: Context,
+  { tx, viewer, req }: Context,
   id: number,
   includeInactive: boolean,
 ) {
   assertInactiveAccess(viewer, includeInactive);
-  const [item] = await toDtos(tx, [await repo.findItem(tx, id)]);
+  const row = await repo.findItem(tx, id);
+  const [item] = await toDtos(tx, [row]);
   if (
     !includeInactive &&
     (!item!.isActive || item!.nodePath.some((node) => !node.isActive))
   )
     throw missing();
   return {
-    ...item!,
+    ...(await attachImages(item!, row, req.app.locals.storage)),
     ...(allowed(viewer, 'requests.viewPrices') ? { latestPrice: null } : {}),
   };
 }
 
 export async function listItems(
-  { tx, viewer }: Context,
+  { tx, viewer, req }: Context,
   id: number,
   {
     page,
@@ -116,11 +133,19 @@ export async function listItems(
     includeInactive,
     active,
   );
-  return { ...result, items: await toDtos(tx, result.items) };
+  const items = await toDtos(tx, result.items);
+  return {
+    ...result,
+    items: await Promise.all(
+      result.items.map((row, index) =>
+        attachImages(items[index]!, row, req.app.locals.storage),
+      ),
+    ),
+  };
 }
 
 export async function search(
-  { tx, viewer }: Context,
+  { tx, viewer, req }: Context,
   input: z.infer<typeof catalogSearchFilters>,
 ) {
   assertInactiveAccess(viewer, input.includeInactive);
@@ -140,7 +165,15 @@ export async function search(
     input.includeInactive,
     input.active,
   );
-  return { ...result, items: await toDtos(tx, result.items) };
+  const items = await toDtos(tx, result.items);
+  return {
+    ...result,
+    items: await Promise.all(
+      result.items.map((row, index) =>
+        attachImages(items[index]!, row, req.app.locals.storage),
+      ),
+    ),
+  };
 }
 
 async function validateUnit(tx: Tx, id: number) {
@@ -219,7 +252,7 @@ export async function addItem(
   const row = await repo.createItem(ctx.tx, { ...input, code }, values);
   const after = toDto(row, node.breadcrumb);
   await ctx.audit('catalogItem.create', 'CatalogItem', row.id, null, after);
-  return after;
+  return attachImages(after, row, ctx.req.app.locals.storage);
 }
 
 async function auditChange(
@@ -236,7 +269,7 @@ async function auditChange(
     oldDto,
     newDto,
   );
-  return newDto!;
+  return attachImages(newDto!, after, ctx.req.app.locals.storage);
 }
 
 export async function editItem(

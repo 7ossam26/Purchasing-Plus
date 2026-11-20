@@ -8,8 +8,12 @@ import * as service from './service.js';
 export const catalogTree = Router();
 catalogTree.get(
   '/categories',
-  ...endpoint(['catalogTree.view'], ({ tx, req }) =>
-    service.listFolders(tx, null, s.nodeListFilters.parse(req.query).active),
+  ...endpoint(['catalogTree.view'], (ctx) =>
+    service.listFolders(
+      ctx,
+      null,
+      s.nodeListFilters.parse(ctx.req.query).active,
+    ),
   ),
 );
 catalogTree.get(
@@ -20,11 +24,11 @@ catalogTree.get(
 );
 catalogTree.get(
   '/nodes/:id/children',
-  ...endpoint(['catalogTree.view'], ({ tx, req }) =>
+  ...endpoint(['catalogTree.view'], (ctx) =>
     service.listFolders(
-      tx,
-      s.pathId.parse(req.params.id),
-      s.nodeListFilters.parse(req.query).active,
+      ctx,
+      s.pathId.parse(ctx.req.params.id),
+      s.nodeListFilters.parse(ctx.req.query).active,
     ),
   ),
 );

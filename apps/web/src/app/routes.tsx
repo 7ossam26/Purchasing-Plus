@@ -52,8 +52,79 @@ const childPages: Partial<Record<string, RouteObject['lazy']>> = {
   }),
 };
 
+function catalogRoute(
+  path: string,
+  anyOf: (typeof modules)[number]['anyOf'],
+): RouteObject {
+  return {
+    element: <ProtectedRoute anyOf={anyOf} />,
+    children: [
+      {
+        path,
+        element: <StandardShell />,
+        children: [
+          {
+            index: true,
+            lazy: async () => ({
+              Component: (await import('../pages/master-data/catalog.js'))
+                .CatalogPage,
+            }),
+          },
+          {
+            path: 'node/:nodeId',
+            lazy: async () => ({
+              Component: (await import('../pages/master-data/catalog.js'))
+                .CatalogPage,
+            }),
+            children: [
+              {
+                path: 'new',
+                element: <ProtectedRoute anyOf={['catalog.create']} />,
+                children: [
+                  {
+                    index: true,
+                    lazy: async () => ({
+                      Component: (
+                        await import('../pages/master-data/catalog.js')
+                      ).NewItemPage,
+                    }),
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            path: 'item/:itemId',
+            lazy: async () => ({
+              Component: (await import('../pages/master-data/catalog.js'))
+                .ItemPage,
+            }),
+            children: [
+              {
+                path: 'edit',
+                element: <ProtectedRoute anyOf={['catalog.edit']} />,
+                children: [
+                  {
+                    index: true,
+                    lazy: async () => ({
+                      Component: (
+                        await import('../pages/master-data/catalog.js')
+                      ).EditItemPage,
+                    }),
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function moduleRoutes(): RouteObject[] {
   return modules.map((module) => {
+    if (module.id === 'catalog') return catalogRoute(module.path, module.anyOf);
     const shell = module.kind === 'admin' ? <AdminShell /> : <StandardShell />;
     const page = modulePages[module.id];
     return {
@@ -97,70 +168,6 @@ const masterDataRoutes: RouteObject[] = [
   {
     element: <ProtectedRoute anyOf={['masterData.view']} />,
     children: [
-      {
-        element: <ProtectedRoute anyOf={['catalog.view']} />,
-        children: [
-          {
-            path: '/catalog',
-            element: <StandardShell />,
-            children: [
-              {
-                index: true,
-                lazy: async () => ({
-                  Component: (await import('../pages/master-data/catalog.js'))
-                    .CatalogPage,
-                }),
-              },
-              {
-                path: 'node/:nodeId',
-                lazy: async () => ({
-                  Component: (await import('../pages/master-data/catalog.js'))
-                    .CatalogPage,
-                }),
-                children: [
-                  {
-                    path: 'new',
-                    element: <ProtectedRoute anyOf={['catalog.create']} />,
-                    children: [
-                      {
-                        index: true,
-                        lazy: async () => ({
-                          Component: (
-                            await import('../pages/master-data/catalog.js')
-                          ).NewItemPage,
-                        }),
-                      },
-                    ],
-                  },
-                ],
-              },
-              {
-                path: 'item/:itemId',
-                lazy: async () => ({
-                  Component: (await import('../pages/master-data/catalog.js'))
-                    .ItemPage,
-                }),
-                children: [
-                  {
-                    path: 'edit',
-                    element: <ProtectedRoute anyOf={['catalog.edit']} />,
-                    children: [
-                      {
-                        index: true,
-                        lazy: async () => ({
-                          Component: (
-                            await import('../pages/master-data/catalog.js')
-                          ).EditItemPage,
-                        }),
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
       {
         element: <StandardShell />,
         children: [

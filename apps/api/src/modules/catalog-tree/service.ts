@@ -21,16 +21,28 @@ export async function nodeWithBreadcrumb(tx: Tx, id: number, picker = false) {
 }
 
 export async function listFolders(
-  tx: Tx,
+  ctx: Context,
   parentId: number | null,
   active?: boolean,
   picker = false,
 ) {
+  const { tx } = ctx;
   const parent =
     parentId === null ? null : await nodeWithBreadcrumb(tx, parentId, picker);
-  return (
-    await repo.listFolders(tx, parent, picker ? true : active, picker)
-  ).map((node) => ({ ...node, coverThumbs: [] }));
+  const storage: import('../../lib/storage.js').StorageDriver =
+    ctx.req.app.locals.storage;
+  const folders = await repo.listFolders(
+    tx,
+    parent,
+    picker ? true : active,
+    picker,
+  );
+  return Promise.all(
+    folders.map(async ({ coverKeys, ...folder }) => ({
+      ...folder,
+      coverThumbs: await Promise.all(coverKeys.map((key) => storage.url(key))),
+    })),
+  );
 }
 
 export async function activeNode(tx: Tx, id: number) {

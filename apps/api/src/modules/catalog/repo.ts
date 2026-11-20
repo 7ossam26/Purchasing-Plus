@@ -2,10 +2,12 @@ import { Prisma } from '@prisma/client';
 import { normalizeArabic } from '@purchasing-plus/shared';
 
 import type { Tx } from '../access/repo.js';
+import { imageSelection } from '../catalog-images/repo.js';
 import { visiblePath } from '../catalog-tree/repo.js';
 
 const itemInclude = {
   node: { select: { path: true } },
+  images: imageSelection,
   unit: { select: { id: true, name: true, isActive: true } },
   attributeValues: {
     orderBy: { attributeId: 'asc' },
@@ -16,6 +18,7 @@ const itemInclude = {
           name: true,
           type: true,
           unitLabel: true,
+          clientVisible: true,
           isActive: true,
         },
       },

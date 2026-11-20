@@ -1,4 +1,9 @@
-import { admin, ar, masterData as copy } from '@purchasing-plus/shared/i18n/ar';
+import {
+  admin,
+  ar,
+  catalogImages as imageCopy,
+  masterData as copy,
+} from '@purchasing-plus/shared/i18n/ar';
 import type { PermissionKey } from '@purchasing-plus/shared/permissions';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -504,3 +509,85 @@ it.each([
     expect(await screen.findByText(empty)).toBeDefined();
   },
 );
+it('navigates ordered images and only renders client-approved details during presentation', async () => {
+  const images = [1, 2].map((id) => ({
+    id,
+    thumbUrl: '/media/thumb-' + id,
+    displayUrl: '/media/image-' + id,
+    width: 80,
+    height: 60,
+    order: id - 1,
+    isCover: id === 1,
+  }));
+  const data = {
+    ...item,
+    images,
+    description: 'ملاحظات داخلية',
+    supplierName: 'مورد داخلي',
+    attributeValues: [
+      {
+        attributeId: gauge.id,
+        attribute: { ...gauge, clientVisible: true },
+        value: '24',
+        option: null,
+      },
+      {
+        attributeId: material.id,
+        attribute: { ...material, clientVisible: false },
+        value: 'وصف داخلي',
+        option: null,
+      },
+    ],
+  };
+  setup(
+    '/catalog/item/11',
+    [...catalogRead, 'requests.viewPrices'],
+    (path, init) =>
+      path === '/catalog/items/11' ? Response.json(data) : fixtures(path, init),
+  );
+  const pageCarousel = await screen.findByRole('region', {
+    name: imageCopy.title,
+  });
+  expect(within(pageCarousel).getByText('1 / 2')).toBeTruthy();
+  fireEvent.keyDown(
+    within(pageCarousel).getByRole('button', { name: imageCopy.open + ' 1' }),
+    { key: 'ArrowLeft' },
+  );
+  expect(within(pageCarousel).getByText('2 / 2')).toBeTruthy();
+  expect(screen.getByText(copy.latestPrice)).toBeTruthy();
+  const trigger = screen.getByRole('button', { name: imageCopy.client });
+  trigger.focus();
+  fireEvent.click(trigger);
+  const dialog = screen.getByRole('dialog', { name: item.name });
+  expect(within(dialog).getByText(gauge.name)).toBeTruthy();
+  expect(within(dialog).queryByText(material.name)).toBeNull();
+  for (const privateText of [
+    item.code,
+    copy.latestPrice,
+    data.description,
+    data.supplierName,
+    'وصف داخلي',
+  ])
+    expect(within(dialog).queryByText(privateText)).toBeNull();
+  expect(within(dialog).getAllByRole('img')).toHaveLength(2);
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: ar.common.close }),
+  );
+  expect(document.activeElement).toBe(trigger);
+  expect(within(pageCarousel).getByText('2 / 2')).toBeTruthy();
+});
+it('lets a catalog-only engineer reach presentation from Home', async () => {
+  const { router, fetch } = setup('/', ['catalog.view']);
+  const link = await screen.findByRole('link', {
+    name: new RegExp(copy.items),
+  });
+  expect(link.getAttribute('href')).toBe('/catalog');
+  await act(() => router.navigate('/catalog/item/11'));
+  await screen.findByRole('heading', { name: item.name });
+  for (const [request] of fetch.mock.calls.filter(([request]) =>
+    request.includes('/catalog/items/11'),
+  ))
+    expect(request).not.toContain('includeInactive');
+  fireEvent.click(screen.getByRole('button', { name: imageCopy.client }));
+  expect(screen.getByRole('dialog', { name: item.name })).toBeTruthy();
+});

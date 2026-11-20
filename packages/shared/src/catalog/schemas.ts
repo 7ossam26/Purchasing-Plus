@@ -58,19 +58,34 @@ const optionLabels = z
   .array(name)
   .refine((options) => new Set(options).size === options.length);
 const unitLabel = name.nullable();
+const clientVisible = z.boolean().optional();
+export const imageOrder = z.strictObject({
+  ids: z
+    .array(id)
+    .max(10)
+    .refine((ids) => new Set(ids).size === ids.length),
+});
+
 export const createAttribute = z.discriminatedUnion('type', [
-  z.strictObject({ name, type: z.literal('TEXT') }),
+  z.strictObject({ name, type: z.literal('TEXT'), clientVisible }),
   z.strictObject({
     name,
     type: z.literal('NUMBER'),
+    clientVisible,
     unitLabel: unitLabel.optional(),
   }),
-  z.strictObject({ name, type: z.literal('SELECT'), options: optionLabels }),
+  z.strictObject({
+    name,
+    type: z.literal('SELECT'),
+    options: optionLabels,
+    clientVisible,
+  }),
 ]);
 export const editAttribute = z
   .strictObject({
     name: name.optional(),
     type: attributeType.optional(),
+    clientVisible,
     unitLabel: unitLabel.optional(),
     isActive: z.literal(true).optional(),
   })

@@ -20,7 +20,7 @@ export async function breadcrumbs(tx: Tx, paths: string[]) {
   const ids = [...new Set(paths.flatMap(pathIds))];
   const rows = await tx.catalogNode.findMany({
     where: { id: { in: ids } },
-    select: { id: true, name: true, isActive: true },
+    select: { id: true, name: true, isActive: true, iconKey: true },
   });
   const byId = new Map(rows.map((row) => [row.id, row]));
   return (path: string) => pathIds(path).map((id) => byId.get(id)!);
@@ -59,18 +59,29 @@ export function listFolders(
     ? Prisma.sql`AND i."isActive" AND ${visiblePath(Prisma.sql`n.path`)}`
     : Prisma.empty;
   return tx.$queryRaw<
-    (CatalogNode & { childGroupCount: number; subtreeItemCount: number })[]
+    (CatalogNode & {
+      childGroupCount: number;
+      subtreeItemCount: number;
+      coverKeys: string[];
+    })[]
   >(Prisma.sql`
-    WITH item_counts AS (
+    WITH ranked AS (
       SELECT nullif(split_part(n.path, '/', ${childPosition}::int), '')::int AS folder_id,
-             count(*)::int AS total
+             i.id, image."thumbKey"
       FROM "CatalogNode" n JOIN "CatalogItem" i ON n.id = i."nodeId"
+      LEFT JOIN "CatalogItemImage" image ON image."itemId" = i.id AND image."isCover" AND NOT image."pendingDelete"
       WHERE ${subtree} ${items}
-      GROUP BY 1
+    ), numbered AS (
+      SELECT *, row_number() OVER (PARTITION BY folder_id ORDER BY ("thumbKey" IS NULL), id) AS position
+      FROM ranked
+    ), item_counts AS (
+      SELECT folder_id, count(*)::int AS total,
+             array_agg("thumbKey" ORDER BY position) FILTER (WHERE position <= 3 AND "thumbKey" IS NOT NULL) AS covers
+      FROM numbered GROUP BY folder_id
     )
     SELECT c.*,
       (SELECT count(*)::int FROM "CatalogNode" g WHERE g."parentId" = c.id ${groups}) AS "childGroupCount",
-      coalesce(item_counts.total, 0) AS "subtreeItemCount"
+      coalesce(item_counts.total, 0) AS "subtreeItemCount", coalesce(item_counts.covers, ARRAY[]::text[]) AS "coverKeys"
     FROM "CatalogNode" c
     LEFT JOIN item_counts ON item_counts.folder_id = c.id
     WHERE ${parentFilter} ${status}

@@ -34,13 +34,13 @@ import {
   itemUrl,
   nodeUrl,
   pathLabel,
-  SamplePlaceholder,
+  SampleCover,
   Stopped,
 } from './presentation.js';
 import './explorer.css';
 
 export type ExplorerProps =
-  | { mode: 'manage' }
+  | { mode: 'manage' | 'browse' }
   | {
       mode: 'pick';
       nodeHref: (nodeId: number) => string;
@@ -99,7 +99,7 @@ export function Explorer(props: ExplorerProps) {
   const manage = props.mode === 'manage';
   const { nodeId } = useParams();
   const node = Number(nodeId);
-  const href = manage ? nodeUrl : props.nodeHref;
+  const href = props.mode === 'pick' ? props.nodeHref : nodeUrl;
   const location = useLocation();
   const navigate = useNavigate();
   const client = useQueryClient();
@@ -468,8 +468,21 @@ function FolderGrid({
               onPreview={onPreview}
               className="catalog-drawer-link min-w-0 rounded-control"
             >
-              <span className="catalog-folder-slot" aria-hidden="true">
-                {folder.parentId === null ? (
+              <span
+                className={`catalog-folder-slot ${folder.coverThumbs.length ? 'catalog-folder-stack' : ''}`}
+                aria-hidden="true"
+              >
+                {folder.coverThumbs.length ? (
+                  folder.coverThumbs.map((url, index) => (
+                    <img
+                      key={url}
+                      src={url}
+                      loading="lazy"
+                      alt=""
+                      data-layer={index}
+                    />
+                  ))
+                ) : folder.parentId === null ? (
                   <CategoryIcon name={folder.iconKey} />
                 ) : (
                   [...folder.name][0]
@@ -688,7 +701,7 @@ function ItemSample({
 }) {
   const children = (
     <>
-      <SamplePlaceholder />
+      <SampleCover item={item} />
       <span className="grid min-w-0 content-start gap-1">
         <bdi className="line-clamp-2 wrap-anywhere text-subtitle">
           {item.name}
@@ -721,7 +734,7 @@ function ItemSample({
     <li
       className={`relative grid min-w-0 rounded-panel border border-seam bg-paper hover:border-concrete ${search ? 'grid-cols-[minmax(0,1fr)_auto] items-center' : ''}`}
     >
-      {props.mode === 'manage' ? (
+      {props.mode !== 'pick' ? (
         <Link className={className + ' rounded-panel'} to={itemUrl(item.id)}>
           {children}
         </Link>

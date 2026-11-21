@@ -31,11 +31,20 @@ export const urgencies = ['NORMAL', 'URGENT', 'VERY_URGENT'] as const;
 export type RequestStatus = (typeof requestStatuses)[number];
 export type ItemState = (typeof itemStates)[number];
 export type Urgency = (typeof urgencies)[number];
-export type DisplayedStage =
-  | Exclude<RequestStatus, 'FULFILMENT'>
-  | 'AWAITING_APPROVAL'
-  | 'AWAITING_RECEIPT'
-  | 'REMAINING';
+export const displayedStages = [
+  'DRAFT',
+  'AWAITING_MANAGER',
+  'RETURNED',
+  'AT_PURCHASING',
+  'PAUSED',
+  'AWAITING_APPROVAL',
+  'AWAITING_RECEIPT',
+  'REMAINING',
+  'COMPLETED',
+  'REJECTED',
+  'CANCELLED',
+] as const;
+export type DisplayedStage = (typeof displayedStages)[number];
 
 export interface Viewer {
   userId: number;

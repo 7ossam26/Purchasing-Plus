@@ -23,6 +23,7 @@ export const edits = {
   fields: header.optional(),
   add: z.array(lineData).optional(),
   remove: z.array(id).optional(),
+  order: z.array(id).optional(),
   change: z
     .array(z.strictObject({ itemId: id, fields: editable.partial() }))
     .optional(),
@@ -97,7 +98,7 @@ function checkLine(data: LineData) {
 export function editRequest(ctx: Context, input: EditInput, viewer: Viewer) {
   const s = ctx.state,
     before = structuredClone(s);
-  const { fields = {}, add = [], remove = [], change = [] } = input;
+  const { fields = {}, add = [], remove = [], change = [], order } = input;
   unique([...add.map((i) => i.id), ...remove, ...change.map((i) => i.itemId)]);
   if (fields.siteId !== undefined && fields.siteId !== s.siteId) {
     if (s.status !== 'DRAFT') refuse('INVALID_INPUT');
@@ -137,16 +138,23 @@ export function editRequest(ctx: Context, input: EditInput, viewer: Viewer) {
   }
   if (s.status === 'DRAFT') {
     s.items = s.items.filter((i) => i.state !== 'REMOVED');
+    if (order) {
+      unique(order);
+      const byId = new Map(s.items.map((item) => [item.id, item]));
+      if (order.length !== byId.size) refuse('INVALID_INPUT');
+      s.items = order.map((id) => byId.get(id) ?? refuse('ITEM_NOT_FOUND'));
+    }
     s.items.forEach((i, n) => {
       i.lineNo = n + 1;
     });
-  }
+  } else if (order) refuse('INVALID_INPUT');
   const diff = diffRequest(before, s);
   const changed =
     diff.fields.length +
     diff.added.length +
     diff.removed.length +
-    diff.changed.length;
+    diff.changed.length +
+    Number(s.items.some((item, index) => item.id !== before.items[index]?.id));
   if (!changed && (s.status !== 'DRAFT' || s.version > 0)) refuse('NO_CHANGES');
   if (s.status === 'DRAFT') return;
   for (const { itemId } of diff.changed) {

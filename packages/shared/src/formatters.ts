@@ -47,6 +47,24 @@ export function cairoDay(value: Date) {
     Number(parts.find((part) => part.type === type)?.value);
   return Date.UTC(read('year'), read('month') - 1, read('day')) / 86400000;
 }
+export function cairoYear(value: Date) {
+  return calendar.formatToParts(value).find((part) => part.type === 'year')!
+    .value;
+}
+
+// Find the first UTC instant on the requested local date, even when DST skips midnight.
+export function cairoDateBoundary(isoDate: string, nextDay = false) {
+  const dayMs = 86400000;
+  const target = Date.parse(isoDate + 'T00:00:00Z') / dayMs + Number(nextDay);
+  let before = (target - 1) * dayMs;
+  let after = (target + 1) * dayMs;
+  while (after - before > 1) {
+    const midpoint = Math.floor((before + after) / 2);
+    if (cairoDay(new Date(midpoint)) < target) before = midpoint;
+    else after = midpoint;
+  }
+  return new Date(after);
+}
 export function formatRelative(
   value: DateValue,
   reference: DateValue = new Date(),

@@ -8,28 +8,194 @@ datasource db {
   extensions = [pg_trgm]
 }
 
+enum RequestStatus {
+  DRAFT
+  AWAITING_MANAGER
+  RETURNED
+  AT_PURCHASING
+  PAUSED
+  FULFILMENT
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum RequestStage {
+  DRAFT
+  AWAITING_MANAGER
+  RETURNED
+  AT_PURCHASING
+  PAUSED
+  AWAITING_APPROVAL
+  AWAITING_RECEIPT
+  REMAINING
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum RequestUrgency {
+  NORMAL
+  URGENT
+  VERY_URGENT
+}
+
+enum RequestItemState {
+  OPEN
+  UNAVAILABLE
+  AWAITING_APPROVAL
+  AWAITING_RECEIPT
+  REMAINING
+  RECEIVED
+  RESOLVED_EXTERNALLY
+  REJECTED
+  CANCELLED
+  REMOVED
+}
+
+model Request {
+  id             Int            @id @default(autoincrement())
+  number         String?        @unique
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  submittedAt    DateTime?
+  version        Int
+  status         RequestStatus
+  displayedStage RequestStage
+  stageStartedAt DateTime
+  siteId         Int
+  site           Site           @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  categoryId     Int
+  category       CatalogNode    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdById    Int
+  creator        User           @relation("RequestCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  urgency        RequestUrgency
+  urgencyLocked  Boolean
+  isModified     Boolean
+  unitOrClient   String?
+  note           String?
+  deliveryFee    Decimal?       @db.Decimal(14, 2)
+  pausedById     Int?
+  pauser         User?          @relation("RequestPauser", fields: [pausedById], references: [id], onDelete: Restrict)
+  pausedAt       DateTime?
+  pauseReason    String?
+  approvedById   Int?
+  approver       User?          @relation("RequestApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  copiedFromId   Int?
+  copiedFrom     Request?       @relation("RequestCopies", fields: [copiedFromId], references: [id], onDelete: SetNull)
+  copies         Request[]      @relation("RequestCopies")
+  rounds         Json           @default("[]")
+  batches        Json           @default("[]")
+  supplyOrders   Json           @default("[]")
+  items          RequestItem[]
+  events         RequestEvent[]
+  notifications  Notification[]
+
+  @@index([siteId, status])
+  @@index([categoryId])
+  @@index([createdById, categoryId])
+  @@index([urgency(sort: Desc), stageStartedAt, id])
+  @@index([copiedFromId])
+}
+
+model RequestItem {
+  id                Int              @id @default(autoincrement())
+  requestId         Int
+  request           Request          @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  lineNo            Int
+  catalogItemId     Int?
+  catalogItem       CatalogItem?     @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
+  nodeId            Int
+  node              CatalogNode      @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+  snapshot          Json
+  specs             String
+  quantity          Decimal          @db.Decimal(14, 2)
+  unitId            Int
+  unit              Unit             @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  otherName         String?
+  state             RequestItemState
+  receivedQty       Decimal          @db.Decimal(14, 2)
+  supplierId        Int?
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lineTotal         Decimal?         @db.Decimal(14, 2)
+  pricedQuantity    Decimal?         @db.Decimal(14, 2)
+  unavailableNote   String?
+  needsRepricing    Boolean
+  modifiedAfterSend Boolean
+  pickedAt          DateTime
+
+  @@unique([requestId, lineNo])
+  @@index([catalogItemId, pickedAt])
+  @@index([nodeId])
+}
+
+model RequestNumberSequence {
+  year      Int @id
+  lastValue Int
+}
+
+model RequestEvent {
+  id            Int            @id @default(autoincrement())
+  requestId     Int
+  request       Request        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  type          String
+  actorId       Int?
+  actor         User?          @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorName     String?
+  actorRoleName String?
+  at            DateTime
+  itemIds       Int[]
+  payload       Json
+  stageAfter    RequestStage
+  notifications Notification[]
+
+  @@index([requestId, id])
+}
+
+model Notification {
+  id        Int          @id @default(autoincrement())
+  userId    Int
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId Int
+  request   Request      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  eventId   Int
+  event     RequestEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  readAt    DateTime?
+
+  @@unique([eventId, userId])
+  @@index([userId, readAt, id])
+  @@index([requestId])
+  @@index([createdAt])
+}
+
 enum SiteScope {
   ASSIGNED
   ALL
 }
 
 model User {
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  id             Int        @id @default(autoincrement())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  id             Int            @id @default(autoincrement())
   name           String
-  username       String     @unique
+  username       String         @unique
   passwordHash   String
-  isSuperadmin   Boolean    @default(false)
-  isActive       Boolean    @default(true)
-  failedAttempts Int        @default(0)
+  isSuperadmin   Boolean        @default(false)
+  isActive       Boolean        @default(true)
+  failedAttempts Int            @default(0)
   lockedUntil    DateTime?
   lastLoginAt    DateTime?
   roleId         Int?
-  role           Role?      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  role           Role?          @relation(fields: [roleId], references: [id], onDelete: Restrict)
   sites          UserSite[]
   sessions       Session[]
   audits         AuditLog[]
+  requests       Request[]      @relation("RequestCreator")
+  approved       Request[]      @relation("RequestApprover")
+  paused         Request[]      @relation("RequestPauser")
+  requestEvents  RequestEvent[]
+  notifications  Notification[]
 
   @@index([roleId])
   @@index([isActive, id])
@@ -88,6 +254,7 @@ model Site {
   address   String     @default("")
   isActive  Boolean    @default(true)
   users     UserSite[]
+  requests  Request[]
 }
 
 model Settings {
@@ -99,23 +266,25 @@ model Settings {
 }
 
 model CatalogNode {
-  id         Int                @id @default(autoincrement())
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
-  name       String
-  parentId   Int?
-  parent     CatalogNode?       @relation("CatalogTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children   CatalogNode[]      @relation("CatalogTree")
-  codePrefix String?            @unique
-  iconKey    String?
-  sortOrder  Int
-  isActive   Boolean            @default(true)
-  path       String
-  depth      Int
-  attributes NodeAttribute[]
-  items      CatalogItem[]
-  sequence   CodeSequence?
-  suppliers  SupplierCategory[]
+  id           Int                @id @default(autoincrement())
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  name         String
+  parentId     Int?
+  parent       CatalogNode?       @relation("CatalogTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children     CatalogNode[]      @relation("CatalogTree")
+  codePrefix   String?            @unique
+  iconKey      String?
+  sortOrder    Int
+  isActive     Boolean            @default(true)
+  path         String
+  depth        Int
+  attributes   NodeAttribute[]
+  items        CatalogItem[]
+  sequence     CodeSequence?
+  suppliers    SupplierCategory[]
+  requests     Request[]
+  requestItems RequestItem[]
 
   @@index([parentId, sortOrder, id])
   @@index([path(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -174,12 +343,13 @@ model NodeAttribute {
 }
 
 model Unit {
-  id        Int           @id @default(autoincrement())
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  name      String        @unique
-  isActive  Boolean       @default(true)
-  items     CatalogItem[]
+  id           Int           @id @default(autoincrement())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  name         String        @unique
+  isActive     Boolean       @default(true)
+  items        CatalogItem[]
+  requestItems RequestItem[]
 
   @@index([isActive, name])
 }
@@ -200,6 +370,7 @@ model CatalogItem {
   attributeValues CatalogItemAttributeValue[]
   prices          CatalogItemPrice[]
   images          CatalogItemImage[]
+  requestItems    RequestItem[]
 
   @@index([nodeId, name, id])
   @@index([unitId])
@@ -265,6 +436,7 @@ model Supplier {
   isActive       Boolean            @default(true)
   categories     SupplierCategory[]
   prices         CatalogItemPrice[]
+  requestItems   RequestItem[]
 
   @@index([isActive, name, id])
   @@index([name, id])

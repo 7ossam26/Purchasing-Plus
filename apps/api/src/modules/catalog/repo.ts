@@ -43,6 +43,12 @@ export function findItem(tx: Tx, id: number) {
     include: itemInclude,
   });
 }
+export function findItemsByIds(tx: Tx, ids: number[]) {
+  return tx.catalogItem.findMany({
+    where: { id: { in: ids } },
+    include: itemInclude,
+  });
+}
 
 export async function nextCodeNumber(tx: Tx, categoryId: number) {
   const [sequence] = await tx.$queryRaw<{ lastValue: number }[]>(Prisma.sql`

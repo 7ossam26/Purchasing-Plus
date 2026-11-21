@@ -60,6 +60,16 @@ export const ar = {
       REJECTED_AUTO: 'رُفض الطلب تلقائيًا',
     },
   },
+  requests: {
+    inactiveSite: 'اختر موقعًا نشطًا.',
+    nodeInUse: 'المجلد مرتبط بطلبات. أوقفه بدلًا من حذفه.',
+    invalidCategory: 'اختر فئة رئيسية نشطة.',
+    invalidDateRange: 'تاريخ البداية بعد تاريخ النهاية.',
+    invalidLine: 'اختر صنفًا ومجموعة ووحدة نشطة داخل فئة الطلب.',
+    numberLimit: 'وصلت أرقام الطلبات للحد السنوي.',
+    supplier: 'مورد',
+    support: 'الدعم الفني',
+  },
   appName: 'Purchasing+',
   common: {
     back: 'رجوع',

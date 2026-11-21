@@ -240,12 +240,21 @@ export const cases = {
       lines: [{ sourceItemId: 11, newItemId: 22, current: null }],
     },
   },
+  addToCatalog: {
+    key: 'catalog.create',
+    statuses: all,
+    input: { version: 1, itemId: 11, catalogItemId: 500, code: 'T-0001' },
+  },
 } satisfies { [A in ActionName]: Case<A> };
 export const names = Object.keys(cases) as ActionName[];
 export function sample(name: ActionName) {
   const c: Case<ActionName> = cases[name];
   const s = fixture(c.statuses[0]!, c.item);
   const item = s.items[0]!;
+  if (name === 'addToCatalog') {
+    item.catalogItemId = null;
+    item.otherName = item.snapshot.name;
+  }
   Object.assign(item, {
     supplierId: 8,
     lineTotal: '13.50',

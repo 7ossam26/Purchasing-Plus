@@ -30,6 +30,7 @@ export const actions = {
   resolveExternally: buying.resolveExternally,
   editDeliveryFee: request.editDeliveryFee,
   copyRequest: request.copyRequest,
+  addToCatalog: request.addToCatalog,
   reject: request.reject,
   rejectPricing: buying.rejectPricing,
   cancel: request.cancel,
@@ -37,6 +38,7 @@ export const actions = {
   autoComplete: request.autoComplete,
 } as const;
 export type ActionName = keyof typeof actions;
+export const { can: canAddToCatalog, apply: applyAddToCatalog } = actions.addToCatalog;
 export type ActionInput<A extends ActionName> = Parameters<
   (typeof actions)[A]['apply']
 >[2];

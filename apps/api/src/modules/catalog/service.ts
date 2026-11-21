@@ -75,6 +75,22 @@ async function toDtos(tx: Tx, rows: repo.ItemRecord[]) {
   return rows.map((row) => toDto(row, crumb(row.node.path)));
 }
 
+export async function itemsByIds(ctx: Context, ids: number[]) {
+  const records = await repo.findItemsByIds(ctx.tx, ids);
+  const dtos = await toDtos(ctx.tx, records);
+  const byId = new Map(
+    records.map((row, index) => [row.id, { row, dto: dtos[index]! }]),
+  );
+  return Promise.all(
+    ids.flatMap((id) => {
+      const entry = byId.get(id);
+      return entry
+        ? [attachImages(entry.dto, entry.row, ctx.req.app.locals.storage)]
+        : [];
+    }),
+  );
+}
+
 export function assertInactiveAccess(viewer: Viewer, includeInactive: boolean) {
   if (includeInactive && !allowed(viewer, 'masterData.view')) throw forbidden();
 }

@@ -16,6 +16,7 @@ export type Context = {
   tx: Tx;
   req: Request;
   viewer: Viewer;
+  now: Date;
   onRollback: (handler: () => Promise<unknown>) => void;
   onCommit: (handler: () => Promise<unknown>) => void;
   audit: (
@@ -32,6 +33,7 @@ export function endpoint(
   status = 200,
   afterCommit?: (response: Response) => void,
   prepare?: RequestHandler,
+  concurrentWrite = false,
 ): RequestHandler[] {
   return [
     requireSession,
@@ -43,7 +45,7 @@ export function endpoint(
       const commit: (() => Promise<unknown>)[] = [];
       const result = await accessTransaction(
         req.app.locals.db,
-        write,
+        write && !concurrentWrite,
         async (tx) => {
           const env = req.app.locals.env;
           const viewer = await authenticate(
@@ -58,6 +60,7 @@ export function endpoint(
             tx,
             req,
             viewer,
+            now: req.app.locals.clock(),
             onRollback: (handler) => rollback.push(handler),
             onCommit: (handler) => commit.push(handler),
             audit: (action, entity, id, oldValue, newValue) =>

@@ -18,6 +18,7 @@ import { attributes } from './modules/attributes/routes.js';
 import { catalog } from './modules/catalog/routes.js';
 import { catalogImages } from './modules/catalog-images/routes.js';
 import { catalogTree } from './modules/catalog-tree/routes.js';
+import { requests } from './modules/requests/routes.js';
 import { settings } from './modules/settings/routes.js';
 import { suppliers } from './modules/suppliers/routes.js';
 import { units } from './modules/units/routes.js';
@@ -26,18 +27,21 @@ export interface AppOptions {
   databaseUrl: string;
   env?: AppEnv;
   storage?: StorageDriver;
+  clock?: () => Date;
 }
 
 export function createApp({
   databaseUrl,
   env = parseEnv(process.env),
   storage = createStorage(env),
+  clock = () => new Date(),
 }: AppOptions) {
   const app = express();
   const db = new PrismaClient({
     adapter: new PrismaPg({ connectionString: databaseUrl }),
   });
   app.locals.db = db;
+  app.locals.clock = clock;
 
   app.locals.env = env;
   app.locals.storage = storage;
@@ -74,6 +78,7 @@ export function createApp({
   app.use('/api/v1/catalog-tree', catalogTree);
   app.use('/api/v1/suppliers', suppliers);
   app.use('/api/v1/units', units);
+  app.use('/api/v1/requests', requests);
   app.get('/api/health', async (_request, response, next) => {
     try {
       await db.$queryRaw(Prisma.sql`SELECT 1`);

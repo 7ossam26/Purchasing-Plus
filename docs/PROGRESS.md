@@ -170,3 +170,27 @@ Each suffix below has two named functions. For example, `canRecordReceipt(state,
 **Open questions and decisions.** T16 permits submission with at least one priced line. If ordinary unpriced OPEN lines remain, purchasing can finish them during fulfilment. When only OPEN lines remain, the displayed stage is AT_PURCHASING and the purchasing queue includes them. T26 treats all three final statuses as read-only for fee edits. Draft deletion yields an audit operation for the adapter, since the event model defines no draft-deletion timeline event.
 
 **Verification.** Lint, typecheck, production builds and all 772 Vitest tests passed. The 597 new lifecycle tests cover the transition matrices, permissions, sites, event recipients, pricing and receipt sequences, Cairo midnight and DST. V8 measured 99.8% lifecycle line coverage against an enforced 95% threshold. The lifecycle tests run without a database. The existing API suite used isolated PostgreSQL 18.
+
+## P08 — Requests API (2026-11-21)
+
+Apply the request and event-history migrations with `pnpm --filter api prisma migrate deploy` and the target `DATABASE_URL` before starting the API. The six request models live in `apps/api/prisma/schema.prisma`. The API lives in `apps/api/src/modules/requests/` and imports request input schemas from the shared package.
+
+All paths below are relative to `/api/v1/requests`.
+
+| Endpoint | Input and result |
+|---|---|
+| `POST /` | Create a draft with `siteId`, `categoryId` and optional `urgency`, `unitOrClient`, `note`. Returns 201 and the request DTO. |
+| `PATCH /:id/draft`, `PATCH /:id` | Save a draft or edit a request before manager approval. A full `items` array replaces live lines. Existing lines carry their `id` and new lines omit it. Each line sends `specs`, a decimal-string `quantity`, and either `catalogItemId` or `nodeId`, `unitId`, `otherName`. Drafts can change site and line order. Category and submitted line numbers are fixed. |
+| `DELETE /:id` | Hard-delete the caller's draft with `confirm: true`. Returns 204. |
+| `POST /:id/submit`, `/resubmit`, `/approve`, `/reject`, `/return`, `/urgency` | Submit or decide a request. Reject and return take `reason`. Urgency takes the higher `urgency` value. Submit refreshes catalog snapshots and uses a gap-free Cairo-year number. |
+| `PATCH /:id/quantities` | Takes `lines: [{ itemId, quantity }]`. Returns the updated request. |
+| `GET /`, `GET /:id`, `GET /:id/timeline` | List filters are `status`, `stage`, `siteId`, `categoryId`, `urgency`, `createdById`, `q`, `from`, `to`, `page`, `pageSize`. Dates filter creation time and date-only bounds use whole Cairo dates. Lists sort by urgency descending and stage start ascending. Timeline returns `{ items }` in append order. |
+| `POST /:id/copy` | Optional `siteId` or a list of rejected `itemIds`. Returns 201 with a fresh draft and records both timeline links. |
+| `POST /:id/items/:itemId/add-to-catalog` | Takes optional catalog editor fields and defaults to the line's name, unit and group. Returns the updated request with the new catalog ID and its original snapshot. Requires `catalog.create` and `requests.view`. |
+| `GET /recent-items?categoryId=` | Returns `{ items }` with up to 12 distinct active items from the caller's scoped request history. Requires `requests.create` and `catalog.view`. |
+
+**Transition contract.** Call `runTransition(ctx, requestId, action, read, prepare)` inside the authenticated `endpoint` transaction. `ctx.viewer` supplies the effective grants and `ctx.now` supplies the timestamp. `read` parses input after the scoped row lock, and `prepare(state, input)` resolves database-backed values into `{ command, state? }` for P07. Existing commands supply `version`. The runner checks it, invokes the shared guard and reducer, persists the result and any copied draft, appends actor snapshots and signed audits, and resolves active, scoped notification recipients in the same transaction. It returns the redacted DTO or null for hard deletion. Later purchasing phases can extend this path with price-history writes. P14 owns post-commit delivery.
+
+**Read contract.** `toRequestDto` includes `displayedStage`, `stageStartedAt`, `stateCounts` and permission-aware `availableActions`. Item prices and supplier IDs follow their independent permissions. Timeline requires `requests.viewTimeline` and applies additional payload redaction, including copy links outside the viewer's scope. A scoped collection returns an empty result for a foreign site filter. Foreign individual requests return 404. Submitted removals are kept for history.
+
+**Verification.** All 810 Vitest tests passed, including HTTP tests on isolated PostgreSQL 18 and the 30 concurrent submits. Coverage measured 96.79% lines in the requests module and 98.69% in the shared lifecycle. No new dependencies.

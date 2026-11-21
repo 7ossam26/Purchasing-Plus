@@ -153,7 +153,15 @@ export function nodeReferences(tx: Tx, id: number) {
   return tx.catalogNode.findUniqueOrThrow({
     where: { id },
     select: {
-      _count: { select: { children: true, items: true, suppliers: true } },
+      _count: {
+        select: {
+          children: true,
+          items: true,
+          suppliers: true,
+          requests: true,
+          requestItems: true,
+        },
+      },
     },
   });
 }

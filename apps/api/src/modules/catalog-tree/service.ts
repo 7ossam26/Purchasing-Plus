@@ -1,8 +1,9 @@
-import type {
-  createCategory,
-  createGroup,
-  editCatalogNode,
-  reorderCatalogNodes,
+import {
+  ar,
+  type createCategory,
+  type createGroup,
+  type editCatalogNode,
+  type reorderCatalogNodes,
 } from '@purchasing-plus/shared';
 import type { z } from 'zod';
 
@@ -199,6 +200,8 @@ export async function removeNode(ctx: Context, id: number) {
       'الفئة مرتبطة بموردين',
       'عدّل فئات الموردين أولًا.',
     );
+  if (_count.requests || _count.requestItems)
+    throw new AppError(409, 'NODE_HAS_REQUESTS', ar.requests.nodeInUse);
   const before = await repo.deleteNode(ctx.tx, id);
   await ctx.audit('catalogNode.delete', 'CatalogNode', id, before);
   return { id };

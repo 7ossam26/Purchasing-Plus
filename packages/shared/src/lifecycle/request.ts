@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { id } from '../access.js';
-import { businessTimeZone } from '../formatters.js';
+import { cairoYear } from '../formatters.js';
 
 import { editRequest, edits } from './edits.js';
 import {
@@ -51,10 +51,7 @@ export const submit = action(
   command({ sequence: z.number().int().min(1).max(99999) }),
   { ...creator, statuses: ['DRAFT'], ready: hasItems, hint: 'primary' },
   (ctx, i) => {
-    const year = new Intl.DateTimeFormat('en', {
-      timeZone: businessTimeZone,
-      year: 'numeric',
-    }).format(new Date(ctx.now));
+    const year = cairoYear(new Date(ctx.now));
     ctx.state.number = `PR-${year}-${String(i.sequence).padStart(5, '0')}`;
     ctx.state.status = 'AWAITING_MANAGER';
     ctx.emit('SUBMITTED', {});
@@ -214,11 +211,36 @@ export const editDeliveryFee = action(
 );
 
 // The caller allocates IDs and supplies an authoritative current catalog lookup for each selected line.
+export function copyableItems(
+  state: RequestState,
+  itemIds?: number[],
+  roundNo?: number,
+) {
+  if (itemIds) unique(itemIds);
+  const round =
+    roundNo === undefined
+      ? undefined
+      : state.rounds.find(
+          (r) => r.number === roundNo && r.status === 'REJECTED',
+        );
+  if (roundNo !== undefined && !round) refuse('INVALID_INPUT');
+  const selected = state.items.filter(
+    (item) =>
+      item.state !== 'REMOVED' &&
+      (!round || round.lines.some((line) => line.itemId === item.id)) &&
+      (!itemIds || (itemIds.includes(item.id) && item.state === 'REJECTED')),
+  );
+  if (itemIds && (!itemIds.length || selected.length !== itemIds.length))
+    refuse('INVALID_INPUT');
+  return selected;
+}
+
 export const copyRequest = action(
   command({
     newId: id,
     siteId: id.optional(),
     roundNo: id.optional(),
+    itemIds: z.array(id).optional(),
     lines: z.array(
       z.strictObject({
         sourceItemId: id,
@@ -240,18 +262,7 @@ export const copyRequest = action(
     const siteId = i.siteId ?? s.siteId;
     if (!inSite(v!, siteId)) refuse('OUT_OF_SCOPE');
     if (i.newId === s.id) refuse('DUPLICATE');
-    const round =
-      i.roundNo === undefined
-        ? null
-        : s.rounds.find(
-            (r) => r.number === i.roundNo && r.status === 'REJECTED',
-          );
-    if (i.roundNo !== undefined && !round) refuse('INVALID_INPUT');
-    const selected = s.items.filter(
-      (l) =>
-        l.state !== 'REMOVED' &&
-        (!round || round.lines.some((r) => r.itemId === l.id)),
-    );
+    const selected = copyableItems(s, i.itemIds, i.roundNo);
     unique(i.lines.map((l) => l.sourceItemId));
     unique(i.lines.map((l) => l.newItemId));
     if (i.lines.length !== selected.length) refuse('INVALID_INPUT');
@@ -296,5 +307,42 @@ export const copyRequest = action(
       stageAfter: 'DRAFT',
       payload: { requestId: s.id, number: s.number },
     });
+  },
+);
+
+export function catalogConversionItem(state: RequestState, itemId: number) {
+  const item =
+    state.items.find((line) => line.id === itemId) ?? refuse('ITEM_NOT_FOUND');
+  if (
+    item.state === 'REMOVED' ||
+    item.catalogItemId !== null ||
+    item.otherName === null
+  )
+    refuse('WRONG_ITEM_STATE');
+  return item;
+}
+
+export const addToCatalog = action(
+  command({ itemId: id, catalogItemId: id, code: z.string().min(1) }),
+  {
+    key: 'catalog.create',
+    statuses: requestStatuses,
+    ready: (s) =>
+      s.items.some(
+        (i) =>
+          i.state !== 'REMOVED' &&
+          i.catalogItemId === null &&
+          i.otherName !== null,
+      )
+        ? undefined
+        : 'WRONG_ITEM_STATE',
+  },
+  (ctx, input) => {
+    const item = catalogConversionItem(ctx.state, input.itemId);
+    item.catalogItemId = input.catalogItemId;
+    item.otherName = null;
+    ctx.emit('ADDED_TO_CATALOG', { lineNo: item.lineNo, code: input.code }, [
+      item.id,
+    ]);
   },
 );

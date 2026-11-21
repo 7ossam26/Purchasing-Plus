@@ -77,7 +77,10 @@ export function replayNotifications(tx: Tx, viewer: Viewer, after: number) {
   });
 }
 
-export function purgeNotifications(db: PrismaClient, now: Date) {
+export function purgeNotifications(
+  db: Pick<PrismaClient, 'notification'>,
+  now: Date,
+) {
   return db.notification.deleteMany({
     where: { createdAt: { lt: new Date(+now - 90 * 86_400_000) } },
   });

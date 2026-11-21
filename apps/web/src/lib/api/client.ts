@@ -16,7 +16,7 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
-async function apiResponse(
+export async function apiResponse(
   path: string,
   { body, ...options }: Omit<RequestInit, 'body'> & { body?: unknown } = {},
   accept = 'application/json',

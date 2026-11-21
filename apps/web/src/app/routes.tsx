@@ -33,6 +33,15 @@ export function AppProviders() {
   );
 }
 const modulePages: Partial<Record<string, RouteObject['lazy']>> = {
+  audit: async () => ({
+    Component: (await import('../pages/admin/audit.js')).AuditPage,
+  }),
+  maintenance: async () => ({
+    Component: (await import('../pages/admin/maintenance.js')).MaintenancePage,
+  }),
+  superadmins: async () => ({
+    Component: (await import('../pages/admin/superadmins.js')).SuperadminsPage,
+  }),
   purchasing: async () => ({
     Component: (await import('../pages/purchasing.js')).PurchasingPage,
   }),
@@ -190,7 +199,12 @@ function moduleRoutes(): RouteObject[] {
     if (module.id === 'catalog') return catalogRoute(module.path, module.anyOf);
     if (module.id === 'requests') return requestRoutes(module.path);
     if (module.id === 'reports') return reportRoutes(module.path, module.anyOf);
-    const shell = module.kind === 'admin' ? <AdminShell /> : <StandardShell />;
+    const shell =
+      module.kind === 'admin' || module.kind === 'support' ? (
+        <AdminShell />
+      ) : (
+        <StandardShell />
+      );
     const page = modulePages[module.id];
     return {
       path: module.path,

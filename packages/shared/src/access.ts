@@ -76,10 +76,40 @@ export const siteFilters = userFilters.pick({
   search: true,
   active: true,
 });
-export const auditFilters = pagination.extend({
-  from: z.iso.datetime().optional(),
-  to: z.iso.datetime().optional(),
-  userId: pathId.optional(),
-  action: z.string().optional(),
-  entity: z.string().optional(),
+export const auditFilters = pagination
+  .extend({
+    from: z.iso.datetime().optional(),
+    to: z.iso.datetime().optional(),
+    userId: pathId.optional(),
+    action: z.string().trim().min(1).max(200).optional(),
+    entity: z.string().trim().min(1).max(200).optional(),
+  })
+  .refine(({ from, to }) => !from || !to || Date.parse(from) <= Date.parse(to));
+
+export const auditPageIds = z.strictObject({
+  ids: z
+    .string()
+    .max(1100)
+    .transform((value) => value.split(','))
+    .pipe(z.array(pathId).min(1).max(100)),
 });
+
+export const maintenanceActions = [
+  'purge-notifications',
+  'rebuild-catalog-search',
+  'verify-audit-log',
+  'reset-operational-data',
+] as const;
+export type MaintenanceAction = (typeof maintenanceActions)[number];
+export const maintenanceAction = z.enum(maintenanceActions);
+export const maintenanceConfirmation = z.strictObject({
+  phrase: z.string().max(100),
+  password: changePassword.shape.currentPassword,
+});
+export type MaintenanceConfirmation = z.infer<typeof maintenanceConfirmation>;
+export type AuditProgress = {
+  checked: number;
+  total: number;
+  mismatches: number;
+  done: boolean;
+};

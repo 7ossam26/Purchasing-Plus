@@ -31,6 +31,7 @@ export interface ModalProps {
   children: ReactNode;
   onClose: () => void;
   drawer?: boolean;
+  detailDrawer?: boolean;
   workspace?: boolean;
   fullScreen?: boolean;
   dismissible?: boolean;
@@ -45,6 +46,7 @@ function Dialog({
   children,
   onClose,
   drawer,
+  detailDrawer,
   workspace,
   fullScreen,
   dismissible = true,
@@ -119,7 +121,7 @@ function Dialog({
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      className={`ui-dialog fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none overflow-hidden bg-transparent text-ink ${fullScreen ? 'items-stretch' : drawer ? 'items-stretch justify-start' : 'items-end justify-center sm:items-center sm:p-6'}`}
+      className={`ui-dialog fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none overflow-hidden bg-transparent text-ink ${fullScreen ? 'items-stretch' : drawer ? 'items-stretch justify-start' : detailDrawer ? 'items-end justify-center sm:items-stretch sm:justify-end' : 'items-end justify-center sm:items-center sm:p-6'}`}
       onKeyDown={keyDown}
       onCancel={(event) => {
         event.preventDefault();
@@ -134,7 +136,7 @@ function Dialog({
       }}
     >
       <section
-        className={`ui-dialog-panel flex min-w-0 flex-col overflow-hidden shadow-overlay ${fullScreen ? 'h-dvh w-full bg-paper' : drawer ? 'h-full w-[min(86vw,320px)] bg-ink text-paper' : workspace ? 'h-dvh w-full bg-paper sm:h-auto sm:max-h-[90dvh] sm:max-w-4xl sm:rounded-panel' : 'max-h-[90dvh] w-full rounded-t-sheet bg-paper sm:max-w-lg sm:rounded-panel'}`}
+        className={`ui-dialog-panel flex min-w-0 flex-col overflow-hidden shadow-overlay ${fullScreen ? 'h-dvh w-full bg-paper' : drawer ? 'h-full w-[min(86vw,320px)] bg-ink text-paper' : detailDrawer ? 'max-h-[90dvh] w-full rounded-t-sheet bg-paper sm:h-full sm:max-h-none sm:max-w-2xl sm:rounded-none' : workspace ? 'h-dvh w-full bg-paper sm:h-auto sm:max-h-[90dvh] sm:max-w-4xl sm:rounded-panel' : 'max-h-[90dvh] w-full rounded-t-sheet bg-paper sm:max-w-lg sm:rounded-panel'}`}
       >
         <header
           className={`flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-6 ${drawer ? 'border-paper/20' : 'border-seam'}`}

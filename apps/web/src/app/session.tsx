@@ -1,5 +1,8 @@
 import { ar } from '@purchasing-plus/shared/i18n/ar';
-import type { PermissionKey } from '@purchasing-plus/shared/permissions';
+import {
+  registry,
+  type PermissionKey,
+} from '@purchasing-plus/shared/permissions';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
@@ -94,7 +97,11 @@ export function can(
   profile: SessionProfile | null | undefined,
   key: PermissionKey,
 ) {
-  return Boolean(profile?.isSuperadmin || profile?.permissions.includes(key));
+  return Boolean(
+    profile?.isSuperadmin ||
+    (!registry.find((permission) => permission.key === key)?.superadminOnly &&
+      profile?.permissions.includes(key)),
+  );
 }
 export function useCan(key: PermissionKey) {
   return can(useSession().profile, key);

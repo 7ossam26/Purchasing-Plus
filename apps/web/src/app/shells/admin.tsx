@@ -8,7 +8,7 @@ import { Button } from '../../components/ui/button.js';
 import { Logo } from '../../components/ui/logo.js';
 import { Modal } from '../../components/ui/modal.js';
 import { ModuleIcon } from '../module-icon.js';
-import { useCanAny } from '../session.js';
+import { useCanAny, useSession } from '../session.js';
 
 import { TopBar } from './standard.js';
 
@@ -33,6 +33,7 @@ function AdminItem({
   );
 }
 function AdminNavigation({ onNavigate }: { onNavigate?: () => void }) {
+  const { profile } = useSession();
   const sites = modules.find((item) => item.id === 'sites')!;
   const masterData = modules.find((item) => item.path === sites.parent)!;
   const canViewSites = useCanAny(sites.anyOf);
@@ -47,6 +48,16 @@ function AdminNavigation({ onNavigate }: { onNavigate?: () => void }) {
         <div className="mt-3 border-t border-paper/20 pt-3">
           <h3 className="px-3 text-small font-semibold">{masterData.label}</h3>
           <AdminItem item={sites} onNavigate={onNavigate} />
+        </div>
+      )}
+      {profile?.isSuperadmin && (
+        <div className="mt-3 border-t border-paper/20 pt-3">
+          <h3 className="px-3 text-small font-semibold">{ar.auth.support}</h3>
+          {modules
+            .filter((item) => item.kind === 'support')
+            .map((item) => (
+              <AdminItem key={item.id} item={item} onNavigate={onNavigate} />
+            ))}
         </div>
       )}
     </nav>

@@ -49,11 +49,58 @@ export async function listAudit(
     orderBy: { id: 'desc' },
   });
   return {
-    items: rows.map((row) => ({ ...row, verified: verifyAudit(secret, row) })),
+    items: rows.map(({ signature, ...row }) => ({
+      ...row,
+      verified: verifyAudit(secret, { ...row, signature }),
+    })),
     total: await tx.auditLog.count({ where }),
     page,
     pageSize,
   };
+}
+const auditIdentity = {
+  id: true,
+  createdAt: true,
+  actorId: true,
+  actorLabel: true,
+  action: true,
+  entity: true,
+  entityId: true,
+  ip: true,
+  signature: true,
+} as const;
+
+export type AuditReader = Pick<Tx, 'auditLog'>;
+export async function verifyAuditPage(
+  tx: AuditReader,
+  ids: number[],
+  secret: string,
+) {
+  const rows = await tx.auditLog.findMany({
+    where: { id: { in: ids } },
+    select: auditIdentity,
+  });
+  const status = new Map(rows.map((row) => [row.id, verifyAudit(secret, row)]));
+  return {
+    items: ids.map((id) => ({ id, verified: status.get(id) ?? false })),
+  };
+}
+
+export async function auditSnapshot(tx: AuditReader) {
+  const { _max, _count } = await tx.auditLog.aggregate({
+    _max: { id: true },
+    _count: true,
+  });
+  return { lastId: _max.id ?? 0, total: _count };
+}
+
+export function auditBatch(tx: AuditReader, after: number, lastId: number) {
+  return tx.auditLog.findMany({
+    where: { id: { gt: after, lte: lastId } },
+    orderBy: { id: 'asc' },
+    take: 250,
+    select: auditIdentity,
+  });
 }
 export function actorById(tx: Tx, id: number) {
   return tx.user.findUniqueOrThrow({

@@ -3,6 +3,7 @@ import {
   purchasingUi,
   reportsUi,
   requestUi,
+  supportUi,
 } from '../i18n/ar.js';
 import { reportHubKeys } from '../reports.js';
 
@@ -14,7 +15,7 @@ interface Module {
   description: string;
   icon: string;
   path: string;
-  kind: 'admin' | 'masterData' | 'reports' | 'operations';
+  kind: 'admin' | 'support' | 'masterData' | 'reports' | 'operations';
   parent?: string;
   anyOf: PermissionKey[];
   children?: { path: string; anyOf: PermissionKey[] }[];
@@ -108,29 +109,29 @@ export const modules: Module[] = [
   },
   {
     id: 'audit',
-    label: 'سجل المراجعة',
-    description: 'مراجعة العمليات',
+    label: supportUi.audit.title,
+    description: supportUi.audit.description,
     icon: 'History',
     path: '/admin/audit',
-    kind: 'admin',
+    kind: 'support',
     anyOf: ['system.auditLog'],
   },
   {
     id: 'maintenance',
-    label: 'الصيانة',
-    description: 'صيانة قاعدة البيانات',
+    label: supportUi.maintenance,
+    description: supportUi.maintenanceDescription,
     icon: 'Wrench',
     path: '/admin/maintenance',
-    kind: 'admin',
+    kind: 'support',
     anyOf: ['system.maintenance'],
   },
   {
     id: 'superadmins',
-    label: 'الدعم الفني',
-    description: 'إدارة حسابات الدعم',
+    label: supportUi.accounts.title,
+    description: supportUi.accounts.description,
     icon: 'Key',
     path: '/admin/superadmins',
-    kind: 'admin',
+    kind: 'support',
     anyOf: ['system.superadmins'],
   },
   {

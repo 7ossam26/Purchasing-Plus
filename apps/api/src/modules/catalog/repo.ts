@@ -112,7 +112,9 @@ export async function updateItem(
   return values || data.name !== undefined ? setSearchText(tx, row) : row;
 }
 
-function searchText(row: ItemRecord) {
+function searchText(
+  row: Pick<ItemRecord, 'name' | 'code' | 'attributeValues'>,
+) {
   return normalizeArabic(
     [
       row.name,
@@ -145,6 +147,42 @@ export async function refreshOptionSearchText(
     include: itemInclude,
   });
   for (const row of rows) await setSearchText(tx, row);
+}
+
+export async function rebuildSearchText(tx: Tx) {
+  let after = 0;
+  let updated = 0;
+  for (;;) {
+    const rows = await tx.catalogItem.findMany({
+      where: { id: { gt: after } },
+      orderBy: { id: 'asc' },
+      take: 250,
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        searchText: true,
+        attributeValues: itemInclude.attributeValues,
+      },
+    });
+    const changes = rows.flatMap((row) => {
+      const text = searchText(row);
+      return text === row.searchText
+        ? []
+        : [Prisma.sql`(${row.id}::integer, ${text}::text)`];
+    });
+    if (changes.length) {
+      updated += await tx.$executeRaw(Prisma.sql`
+        UPDATE "CatalogItem" AS item
+        SET "searchText" = changes.text
+        FROM (VALUES ${Prisma.join(changes)}) AS changes(id, text)
+        WHERE item.id = changes.id
+      `);
+    }
+    const last = rows.at(-1);
+    if (!last) return { updated };
+    after = last.id;
+  }
 }
 
 export async function listItems(

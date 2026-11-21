@@ -181,6 +181,7 @@ export async function listAccounts(c: Context, support: boolean) {
     total,
     page,
     pageSize,
+    ...(support ? { activeTotal: await activeSupportCount(c.tx) } : {}),
   };
 }
 

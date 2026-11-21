@@ -18,6 +18,14 @@ export const urlSeconds = 3600;
 export const mediaPath = '/api/v1/media';
 export const r2Origin = (account: string) =>
   `https://${account}.r2.cloudflarestorage.com`;
+
+export function imageStorageOrigin(env: AppEnv) {
+  if (env.STORAGE_PUBLIC_BASE_URL)
+    return new URL(env.STORAGE_PUBLIC_BASE_URL).origin;
+  if (env.STORAGE_DRIVER === 'r2' && env.R2_ACCOUNT_ID)
+    return r2Origin(env.R2_ACCOUNT_ID);
+  return undefined;
+}
 export interface StorageDriver {
   put(key: string, buffer: Buffer, contentType: string): Promise<void>;
   delete(key: string): Promise<void>;
@@ -136,6 +144,7 @@ export function createStorage(env: AppEnv) {
     new S3Client({
       region: 'auto',
       endpoint: r2Origin(env.R2_ACCOUNT_ID!),
+      forcePathStyle: true,
       credentials: {
         accessKeyId: env.R2_ACCESS_KEY_ID!,
         secretAccessKey: env.R2_SECRET_ACCESS_KEY!,

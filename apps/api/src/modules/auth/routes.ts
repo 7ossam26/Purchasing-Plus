@@ -28,7 +28,10 @@ export function authRoutes() {
       const token = await logIn(req, input);
       if (!token) throw invalidLogin();
       res
-        .cookie(cookie, token, { ...cookieOptions(), maxAge: idle })
+        .cookie(cookie, token, {
+          ...cookieOptions(req.app.locals.env),
+          maxAge: idle,
+        })
         .status(204)
         .end();
     },
@@ -44,7 +47,7 @@ export function authRoutes() {
         return null;
       },
       204,
-      (res) => res.clearCookie(cookie, cookieOptions()),
+      (res) => res.clearCookie(cookie, cookieOptions(res.app.locals.env)),
     ),
   );
   router.post(
@@ -63,7 +66,7 @@ export function authRoutes() {
         return null;
       },
       204,
-      (res) => res.clearCookie(cookie, cookieOptions()),
+      (res) => res.clearCookie(cookie, cookieOptions(res.app.locals.env)),
     ),
   );
   router.get(

@@ -65,10 +65,10 @@ export function originCheck(origin: string): RequestHandler {
 }
 export const idle = 7 * 24 * 3600 * 1000;
 export const cookie = 'purchasing_session';
-export function cookieOptions() {
+export function cookieOptions(env: AppEnv) {
   return {
     httpOnly: true,
-    secure: !['development', 'test'].includes(process.env.NODE_ENV ?? ''),
+    secure: env.NODE_ENV === 'production',
     sameSite: 'lax' as const,
     path: '/',
   };
@@ -158,7 +158,10 @@ export function requireSession(
     return viewer;
   }).then((v) => {
     req.viewer = v;
-    res.cookie(cookie, cookieToken(req), { ...cookieOptions(), maxAge: idle });
+    res.cookie(cookie, cookieToken(req), {
+      ...cookieOptions(env),
+      maxAge: idle,
+    });
     res.setHeader('Cache-Control', 'no-store');
     next();
   }, next);

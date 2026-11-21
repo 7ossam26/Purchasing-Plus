@@ -67,7 +67,7 @@ export function openStream(
 
   res.set({
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-store, no-transform',
+    'Cache-Control': 'no-cache, no-store, no-transform',
     'X-Accel-Buffering': 'no',
   });
   res.flushHeaders();

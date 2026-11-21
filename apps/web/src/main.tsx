@@ -7,6 +7,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 import { createQueryClient } from './app/query.js';
 import { routes } from './app/routes.js';
 import '@fontsource-variable/cairo';
+import 'sonner/dist/styles.css';
 import './styles/base.css';
 
 const root = document.getElementById('root');

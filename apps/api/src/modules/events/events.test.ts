@@ -359,6 +359,14 @@ it('sends a 25 second heartbeat and omits request signals outside scope or permi
   const live = await stream(foreign, await ticket(foreign));
   const ungranted = await stream(denied, await ticket(denied));
   try {
+    expect(live.response.headers.get('content-type')).toContain(
+      'text/event-stream',
+    );
+    expect(live.response.headers.get('cache-control')).toBe(
+      'no-cache, no-store, no-transform',
+    );
+    expect(live.response.headers.get('x-accel-buffering')).toBe('no');
+    expect(live.response.headers.has('content-encoding')).toBe(false);
     expect(await live.next()).toContain('event: ready');
     expect(await ungranted.next()).toContain('event: ready');
     bus.publish({ type: 'request.changed', requestId: 123, siteId });

@@ -38,3 +38,9 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm --filter api prisma migrate deploy
       - run: pnpm test:coverage
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag purchasing-plus:ci .

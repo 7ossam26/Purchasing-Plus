@@ -1,0 +1,13 @@
+.git
+.github
+.kilocode
+**/node_modules
+**/dist
+**/coverage
+**/.vite
+**/*.tsbuildinfo
+**/.env*
+**/storage
+**/*.log
+docs
+prompts

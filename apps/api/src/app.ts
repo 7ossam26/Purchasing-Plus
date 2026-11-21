@@ -1,17 +1,19 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '@prisma/client';
+import compression from 'compression';
 import express from 'express';
 import helmet from 'helmet';
 
-import { parseEnv, type AppEnv } from './config/env.js';
+import { parseEnv, storageEnvSchema, type AppEnv } from './config/env.js';
+import { serveSpa } from './lib/spa.js';
 import {
   createStorage,
+  imageStorageOrigin,
   LocalStorage,
   mediaPath,
-  r2Origin,
   type StorageDriver,
 } from './lib/storage.js';
-import { originCheck } from './middleware/access.js';
+import { missing, originCheck } from './middleware/access.js';
 import { errorHandler } from './middleware/errors.js';
 import { accessRoutes } from './modules/access/routes.js';
 import { attributes } from './modules/attributes/routes.js';
@@ -38,6 +40,7 @@ export interface AppOptions {
   storage?: StorageDriver;
   clock?: () => Date;
   eventBus?: EventBus;
+  webRoot?: string;
 }
 
 export function createApp({
@@ -46,8 +49,11 @@ export function createApp({
   storage = createStorage(env),
   clock = () => new Date(),
   eventBus = new MemoryEventBus(),
+  webRoot,
 }: AppOptions) {
   const app = express();
+  // Production traffic reaches the private application port through Traefik.
+  if (env.NODE_ENV === 'production') app.set('trust proxy', 1);
   const db = new PrismaClient({
     adapter: new PrismaPg({ connectionString: databaseUrl }),
   });
@@ -59,6 +65,7 @@ export function createApp({
   app.locals.env = env;
   app.locals.storage = storage;
   app.locals.cache = new Map();
+  const imageOrigin = imageStorageOrigin(env);
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -67,19 +74,13 @@ export function createApp({
           styleSrc: ["'self'"],
           fontSrc: ["'self'"],
           scriptSrc: ["'self'"],
-          imgSrc: [
-            "'self'",
-            ...(env.STORAGE_DRIVER === 'r2'
-              ? [r2Origin(env.R2_ACCOUNT_ID!)]
-              : []),
-            ...(env.STORAGE_PUBLIC_BASE_URL
-              ? [new URL(env.STORAGE_PUBLIC_BASE_URL).origin]
-              : []),
-          ],
+          imgSrc: imageOrigin ? ["'self'", imageOrigin] : ["'self'"],
         },
       },
     }),
   );
+  // Compression honors Cache-Control: no-transform on live event streams.
+  app.use(compression());
   app.use(originCheck(env.PUBLIC_ORIGIN));
   if (storage instanceof LocalStorage)
     app.get(mediaPath + '/*key', storage.serve);
@@ -93,14 +94,26 @@ export function createApp({
   app.use('/api/v1/suppliers', suppliers);
   app.use('/api/v1/units', units);
   app.use('/api/v1/requests', requests);
-  app.get('/api/health', async (_request, response, next) => {
+  app.get('/api/health', async (_request, response) => {
+    response.set('Cache-Control', 'no-store');
+    const storageStatus = storageEnvSchema.safeParse(env).success
+      ? 'ok'
+      : 'unavailable';
+    let dbStatus = 'ok';
     try {
       await db.$queryRaw(Prisma.sql`SELECT 1`);
-      response.json({ status: 'ok', db: 'ok' });
-    } catch (error) {
-      next(error);
+    } catch {
+      dbStatus = 'unavailable';
     }
+    const ok = dbStatus === 'ok' && storageStatus === 'ok';
+    response.status(ok ? 200 : 503).json({
+      status: ok ? 'ok' : 'unavailable',
+      db: dbStatus,
+      storage: storageStatus,
+    });
   });
+  app.use('/api', (_request, _response, next) => next(missing()));
+  if (webRoot) app.use(serveSpa(webRoot));
   app.use(errorHandler);
   return app;
 }

@@ -5,8 +5,10 @@ import { parseEnv } from './config/env.js';
 import { bootstrap } from './modules/access/seed.js';
 import { startNotificationPurge } from './modules/events/service.js';
 
+let configuring = true;
 try {
   const env = parseEnv(process.env);
+  configuring = false;
   const app = createApp({
     databaseUrl: env.DATABASE_URL,
     env,
@@ -22,7 +24,7 @@ try {
   });
 } catch (error) {
   process.stderr.write(
-    `${error instanceof Error ? error.message : String(error)}\n`,
+    `${configuring && error instanceof Error ? error.message : 'API startup failed'}\n`,
   );
   process.exitCode = 1;
 }

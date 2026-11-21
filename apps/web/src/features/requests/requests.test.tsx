@@ -19,6 +19,7 @@ import {
 } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '../../app/query.js';
 import { routes } from '../../app/routes.js';
@@ -528,4 +529,10 @@ it('shows a returned note to the creator while keeping the timeline hidden witho
   expect(await screen.findByText('الكمية تحتاج مراجعة')).toBeTruthy();
   expect(screen.queryByRole('tab', { name: copy.timeline })).toBeNull();
   expect(screen.getByRole('button', { name: copy.resubmit })).toBeTruthy();
+});
+
+it('checks accessibility on the populated request page', async () => {
+  setup('/requests/10', { initial: waiting });
+  await screen.findByRole('heading', { name: waiting.number! });
+  expect((await axe(document.body)).violations).toEqual([]);
 });

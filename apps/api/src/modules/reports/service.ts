@@ -282,7 +282,11 @@ export async function getReport(
         c('pricingDecisions', 'pricingDecisions', 'number'),
         c('received', 'received', 'number'),
       ];
-      const [kpis, ...rows] = await purchasing.userActivity(read, period);
+      const [kpis, ...rows] = await purchasing.userActivity(
+        read,
+        period,
+        viewer.isSuperadmin,
+      );
       const main = table(
         ar.destinations[id].title,
         [c('actor', 'actor'), ...columns],

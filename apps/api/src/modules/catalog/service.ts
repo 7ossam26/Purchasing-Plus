@@ -137,6 +137,29 @@ export async function getItem(
   };
 }
 
+async function pageDtos(
+  tx: Tx,
+  rows: repo.ItemRecord[],
+  storage: StorageDriver,
+  viewer: Viewer,
+) {
+  const items = await toDtos(tx, rows);
+  const prices = allowed(viewer, 'requests.viewPrices')
+    ? await repo.latestPrices(
+        tx,
+        rows.map((row) => row.id),
+      )
+    : null;
+  return Promise.all(
+    rows.map(async (row, index) => ({
+      ...(await attachImages(items[index]!, row, storage)),
+      ...(prices
+        ? { latestPrice: toPriceDto(prices.get(row.id) ?? null, viewer) }
+        : {}),
+    })),
+  );
+}
+
 export async function listItems(
   { tx, viewer, req }: Context,
   id: number,
@@ -157,14 +180,9 @@ export async function listItems(
     includeInactive,
     active,
   );
-  const items = await toDtos(tx, result.items);
   return {
     ...result,
-    items: await Promise.all(
-      result.items.map((row, index) =>
-        attachImages(items[index]!, row, req.app.locals.storage),
-      ),
-    ),
+    items: await pageDtos(tx, result.items, req.app.locals.storage, viewer),
   };
 }
 
@@ -189,14 +207,9 @@ export async function search(
     input.includeInactive,
     input.active,
   );
-  const items = await toDtos(tx, result.items);
   return {
     ...result,
-    items: await Promise.all(
-      result.items.map((row, index) =>
-        attachImages(items[index]!, row, req.app.locals.storage),
-      ),
-    ),
+    items: await pageDtos(tx, result.items, req.app.locals.storage, viewer),
   };
 }
 

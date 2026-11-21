@@ -18,7 +18,11 @@ export function redact(value: unknown): Prisma.InputJsonValue | null {
     return Object.fromEntries(
       Object.entries(value).map(([k, v]) => [
         k,
-        /password|token|secret/i.test(k) ? '[REDACTED]' : redact(v),
+        /password|token|secret|authorization|cookie|api[_-]?key|access[_-]?key|database[_-]?url|session[_-]?id/i.test(
+          k,
+        )
+          ? '[REDACTED]'
+          : redact(v),
       ]),
     );
   if (

@@ -15,6 +15,7 @@ import {
 } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '../../app/query.js';
 import { routes } from '../../app/routes.js';
@@ -268,4 +269,12 @@ it('renders live template previews and blocks invalid placeholders and aging val
     rfqIntro: '{categoryName} — {siteAddress}',
     agingDays: 8,
   });
+});
+
+it('checks accessibility of the editable permission controls', async () => {
+  setup('/admin/roles/new', () => Response.json(page([])));
+  await screen.findByRole('switch', {
+    name: new RegExp(registry.find((p) => p.key === 'requests.create')!.label),
+  });
+  expect((await axe(document.body)).violations).toEqual([]);
 });

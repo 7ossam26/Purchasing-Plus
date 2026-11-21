@@ -1,3 +1,4 @@
+import { formatDateTime, formatMoney } from '@purchasing-plus/shared';
 import { masterData as copy } from '@purchasing-plus/shared/i18n/ar';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
@@ -50,6 +51,7 @@ export function ItemPage() {
   const query = useItem(Number(itemId));
   const manage = useCan('masterData.view');
   const prices = useCan('requests.viewPrices');
+  const supplierNames = useCan('requests.viewSupplierNames');
   return (
     <>
       <LoadRecord query={query}>
@@ -106,7 +108,34 @@ export function ItemPage() {
                     />
                   ))}
                   {prices && (
-                    <Detail label={copy.latestPrice} value={copy.dash} />
+                    <>
+                      <Detail
+                        label={copy.latestPrice}
+                        value={
+                          item.latestPrice
+                            ? formatMoney(item.latestPrice.unitPrice)
+                            : copy.dash
+                        }
+                      />
+                      {item.latestPrice && (
+                        <Detail
+                          label={copy.priceDate}
+                          value={formatDateTime(item.latestPrice.createdAt)}
+                        />
+                      )}
+                      {item.latestPrice?.requestNumber && (
+                        <Detail
+                          label={copy.priceRequest}
+                          value={item.latestPrice.requestNumber}
+                        />
+                      )}
+                      {supplierNames && item.latestPrice?.supplier && (
+                        <Detail
+                          label={copy.priceSupplier}
+                          value={item.latestPrice.supplier.name}
+                        />
+                      )}
+                    </>
                   )}
                 </dl>
               </div>

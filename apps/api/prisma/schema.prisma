@@ -97,6 +97,7 @@ model Request {
   @@index([categoryId])
   @@index([createdById, categoryId])
   @@index([urgency(sort: Desc), stageStartedAt, id])
+  @@index([siteId, urgency(sort: Desc), stageStartedAt, id])
   @@index([copiedFromId])
 }
 

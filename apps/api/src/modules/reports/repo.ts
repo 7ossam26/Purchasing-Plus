@@ -129,7 +129,8 @@ export function overview(
         count(DISTINCT e."requestId") FILTER (WHERE e.type IN ('MANAGER_REJECTED', 'REJECTED_AUTO'))::int AS rejected,
         count(DISTINCT e."requestId") FILTER (WHERE e.type = 'CANCELLED')::int AS cancelled
       FROM "RequestEvent" e JOIN scoped r ON r.id = e."requestId"
-      WHERE ${during(Prisma.sql`e.at`, period)}
+      WHERE e.type IN ('COMPLETED', 'MANAGER_REJECTED', 'REJECTED_AUTO', 'CANCELLED')
+        AND ${during(Prisma.sql`e.at`, period)}
     `),
     read(Prisma.sql`
       SELECT r."displayedStage"::text AS stage, count(*)::int AS count

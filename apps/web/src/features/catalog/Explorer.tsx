@@ -1,4 +1,8 @@
-import { formatNumber, normalizeArabic } from '@purchasing-plus/shared';
+import {
+  formatMoney,
+  formatNumber,
+  normalizeArabic,
+} from '@purchasing-plus/shared';
 import { admin, ar, masterData as copy } from '@purchasing-plus/shared/i18n/ar';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -701,6 +705,7 @@ function ItemSample({
   props: ExplorerProps;
   search: boolean;
 }) {
+  const prices = useCan('requests.viewPrices');
   const children = (
     <>
       <SampleCover item={item} />
@@ -723,6 +728,12 @@ function ItemSample({
                 {attributeLabel(attribute)}
               </bdi>
             ))}
+          </span>
+        )}
+        {prices && item.latestPrice && (
+          <span className="numeric text-small">
+            {copy.latestPrice}{' '}
+            <bdi>{formatMoney(item.latestPrice.unitPrice)}</bdi>
           </span>
         )}
         <Stopped active={item.isActive} />

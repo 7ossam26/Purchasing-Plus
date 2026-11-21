@@ -1,3 +1,4 @@
+import { formatMoney } from '@purchasing-plus/shared';
 import {
   admin,
   ar,
@@ -17,6 +18,7 @@ import {
 } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '../../app/query.js';
 import { AppProviders, routes } from '../../app/routes.js';
@@ -202,6 +204,27 @@ it('renders item details and shows the price slot only with the price grant', as
   setup('/catalog/item/11', [...catalogRead, 'requests.viewPrices']);
   expect(await screen.findByText(copy.latestPrice)).toBeDefined();
   expect(screen.getByText(copy.dash)).toBeDefined();
+});
+
+it('displays a populated latest price on catalog details and folder swatches', async () => {
+  const priced = {
+    ...item,
+    latestPrice: { unitPrice: '3917.45', createdAt: '2026-05-01T12:00:00Z' },
+  };
+  for (const path of ['/catalog/item/11', '/catalog/node/2']) {
+    setup(path, [...catalogRead, 'requests.viewPrices'], (url, init) => {
+      if (url.startsWith('/catalog/items/11')) return Response.json(priced);
+      if (url.startsWith('/catalog/nodes/2/items'))
+        return Response.json(page([priced]));
+      return fixtures(url, init);
+    });
+    expect(
+      await screen.findByText(formatMoney('3917.45'), {
+        normalizer: (value) => value,
+      }),
+    ).toBeDefined();
+    cleanup();
+  }
 });
 
 it('opens a folder by URL, updates the breadcrumb and returns to the parent on browser back', async () => {
@@ -590,4 +613,10 @@ it('lets a catalog-only engineer reach presentation from Home', async () => {
     expect(request).not.toContain('includeInactive');
   fireEvent.click(screen.getByRole('button', { name: imageCopy.client }));
   expect(screen.getByRole('dialog', { name: item.name })).toBeTruthy();
+});
+
+it('checks accessibility in a populated catalog folder', async () => {
+  setup('/catalog/node/1', catalogRead);
+  await screen.findByRole('link', { name: /كابلات/ });
+  expect((await axe(document.body)).violations).toEqual([]);
 });

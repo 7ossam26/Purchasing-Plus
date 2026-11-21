@@ -441,6 +441,17 @@ it('verifies signed audit identities and recursively removes secrets', async () 
   });
 
   expect(
+    redact({
+      headers: { authorization: 'bearer', cookie: 'session' },
+      DATABASE_URL: 'connection',
+      apiKey: 'key',
+    }),
+  ).toEqual({
+    headers: { authorization: '[REDACTED]', cookie: '[REDACTED]' },
+    DATABASE_URL: '[REDACTED]',
+    apiKey: '[REDACTED]',
+  });
+  expect(
     await db.session.count({
       where: {
         id: createHmac('sha256', env.SESSION_SECRET)
@@ -528,5 +539,42 @@ it('paginates role counts and never exposes unassignable keys', async () => {
       userCount: expect.any(Number),
     });
     expect(row.keys).not.toContain('requests.viewPrices');
+  }
+});
+
+it('sets production cookie and response protections on login and session renewal', async () => {
+  const publicOrigin = 'https://purchasing.example';
+  const production = createApp({
+    databaseUrl: testDatabaseUrl(),
+    env: { ...env, PUBLIC_ORIGIN: publicOrigin, NODE_ENV: 'production' },
+  });
+  try {
+    const user = await makeUser(db, 'cookie-check', []);
+    const login = await request(production)
+      .post(base + '/auth/login')
+      .set('Origin', publicOrigin)
+      .send({ username: user.username, password: testPassword })
+      .expect(204);
+    const header = String(login.headers['set-cookie']![0]);
+    const profile = await request(production)
+      .get(base + '/me')
+      .set('Cookie', header.split(';')[0]!)
+      .expect(200);
+    for (const res of [login, profile]) {
+      const cookie = String(res.headers['set-cookie']![0]);
+      for (const attr of ['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/'])
+        expect(cookie).toContain(attr);
+      expect(res.headers['cache-control']).toContain('no-store');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['content-security-policy']?.split(';')).toEqual(
+        expect.arrayContaining([
+          "default-src 'self'",
+          "script-src 'self'",
+          "object-src 'none'",
+        ]),
+      );
+    }
+  } finally {
+    await production.locals.db.$disconnect();
   }
 });

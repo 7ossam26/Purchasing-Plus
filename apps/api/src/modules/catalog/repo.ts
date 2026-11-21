@@ -142,19 +142,20 @@ export async function refreshOptionSearchText(
   attributeId: number,
   optionId: number,
 ) {
-  const rows = await tx.catalogItem.findMany({
-    where: { attributeValues: { some: { attributeId, optionId } } },
-    include: itemInclude,
+  await rebuildSearchText(tx, {
+    attributeValues: { some: { attributeId, optionId } },
   });
-  for (const row of rows) await setSearchText(tx, row);
 }
 
-export async function rebuildSearchText(tx: Tx) {
+export async function rebuildSearchText(
+  tx: Tx,
+  filter: Prisma.CatalogItemWhereInput = {},
+) {
   let after = 0;
   let updated = 0;
   for (;;) {
     const rows = await tx.catalogItem.findMany({
-      where: { id: { gt: after } },
+      where: { ...filter, id: { gt: after } },
       orderBy: { id: 'asc' },
       take: 250,
       select: {
@@ -174,7 +175,7 @@ export async function rebuildSearchText(tx: Tx) {
     if (changes.length) {
       updated += await tx.$executeRaw(Prisma.sql`
         UPDATE "CatalogItem" AS item
-        SET "searchText" = changes.text
+        SET "searchText" = changes.text, "updatedAt" = CURRENT_TIMESTAMP
         FROM (VALUES ${Prisma.join(changes)}) AS changes(id, text)
         WHERE item.id = changes.id
       `);

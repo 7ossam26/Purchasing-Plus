@@ -284,9 +284,9 @@ export function ItemRows({
                 {formatNumber(line.lineNo)}
               </span>
               <div className="min-w-0 grow">
-                <h3 className="wrap-anywhere text-subtitle">
+                <h2 className="wrap-anywhere text-subtitle">
                   <bdi>{line.snapshot.name}</bdi>
-                </h3>
+                </h2>
                 {line.specs && (
                   <p className="wrap-anywhere text-small text-concrete">
                     <bdi>{line.specs}</bdi>

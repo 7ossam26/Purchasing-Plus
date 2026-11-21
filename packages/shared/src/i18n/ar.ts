@@ -583,6 +583,9 @@ export const masterData = {
   nonemptyDetail:
     'المجلد فيه مجموعات أو أصناف. ممكن توقفه عشان يختفي من الاختيارات.',
   latestPrice: 'آخر سعر شراء',
+  priceDate: 'تاريخ الشراء',
+  priceRequest: 'طلب الشراء',
+  priceSupplier: 'المورد',
   imageArea: 'صورة الصنف',
   type: 'نوع الخاصية',
   types: { TEXT: 'نص', NUMBER: 'رقم', SELECT: 'اختيار من قائمة' },

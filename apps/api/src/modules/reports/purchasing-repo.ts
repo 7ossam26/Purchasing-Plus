@@ -135,7 +135,11 @@ export function unavailable(read: ReadRows, period: ReportPeriod) {
   ]);
 }
 
-export function userActivity(read: ReadRows, period: ReportPeriod) {
+export function userActivity(
+  read: ReadRows,
+  period: ReportPeriod,
+  includeSupport: boolean,
+) {
   return read(Prisma.sql`
     , actions AS (
       SELECT r."createdById" AS actor, 'CREATED' AS type
@@ -156,6 +160,7 @@ export function userActivity(read: ReadRows, period: ReportPeriod) {
       count(*) FILTER (WHERE a.type IN ('PRICING_APPROVED', 'PRICING_REJECTED'))::int AS "pricingDecisions",
       count(*) FILTER (WHERE a.type = 'RECEIPT_RECORDED')::int AS received
     FROM actions a JOIN "User" u ON u.id = a.actor
+    WHERE ${includeSupport} OR NOT u."isSuperadmin"
     GROUP BY GROUPING SETS ((u.id, u.name), ()) HAVING count(*) > 0
     ORDER BY u.id NULLS FIRST, u.name
   `);

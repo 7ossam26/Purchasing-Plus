@@ -767,3 +767,60 @@ it('exports every main table and all filtered log rows using the visible Arabic 
   const approvals = await exported(redacted, 'records/approvals?q=001');
   expect(approvals.getRow(1).values).not.toContain(copy.role);
 });
+
+it('keeps restricted columns and supplier identities out of all ten workbooks', async () => {
+  for (const path of [
+    ...reportDestinations.map(
+      ([id]) =>
+        'reports/' +
+        id +
+        (id === 'price-history' ? '?itemId=' + catalogId : ''),
+    ),
+    ...recordDestinations.map(([id]) => 'records/' + id),
+  ]) {
+    const { body } = await get(redacted, path).expect(200);
+    const table: ReportTable = body.main;
+    expect(
+      table.columns.filter(
+        (col) =>
+          col.kind === 'money' ||
+          ['supplier', 'role', 'resolver'].includes(col.key),
+      ),
+      path,
+    ).toEqual([]);
+    const sheet = await exported(redacted, path);
+    expect((sheet.getRow(1).values as unknown[]).slice(1)).toEqual(
+      table.columns.map((col) => col.label),
+    );
+    expect(JSON.stringify(sheet.getSheetValues())).not.toContain('مورد أول');
+    expect(sheet.rowCount).toBe(table.rows.length + 1);
+  }
+});
+
+it('hides support accounts in user activity and its workbook', async () => {
+  const support = await db.user.create({
+    data: {
+      name: 'Support fixture',
+      username: 'support-fixture',
+      isSuperadmin: true,
+      passwordHash: 'unused',
+    },
+  });
+  await db.requestEvent.create({
+    data: {
+      requestId,
+      type: 'MANAGER_APPROVED',
+      at: new Date('2026-06-10T10:00:00Z'),
+      actorId: support.id,
+      actorName: support.name,
+      itemIds: [],
+      payload: {},
+      stageAfter: 'AT_PURCHASING',
+    },
+  });
+  const path = 'reports/user-activity?from=2026-06-10&to=2026-06-10';
+  expect((await get(reader, path).expect(200)).body.main.rows).toEqual([]);
+  expect(
+    JSON.stringify((await exported(reader, path)).getSheetValues()),
+  ).not.toContain(support.name);
+});

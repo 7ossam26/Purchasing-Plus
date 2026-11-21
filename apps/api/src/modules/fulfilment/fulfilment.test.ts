@@ -400,6 +400,22 @@ it('serializes competing approvers, freezes comparison prices, groups orders and
     'supplier',
   );
   expect(await catalog(item, reader)).not.toHaveProperty('latestPrice');
+  for (const path of [
+    '/api/v1/catalog/nodes/' + nodeId + '/items',
+    '/api/v1/catalog/search?categoryId=' +
+      nodeId +
+      '&q=' +
+      encodeURIComponent('رخام'),
+  ]) {
+    const page = await http('get', path, decider).expect(200);
+    const priced = page.body.items.find(
+      (row: { id: number }) => row.id === item,
+    );
+    expect(priced.latestPrice.unitPrice).toBe('1.01');
+    expect(priced.latestPrice).not.toHaveProperty('supplier');
+    const hidden = await http('get', path, reader).expect(200);
+    expect(hidden.text).not.toContain('latestPrice');
+  }
   const foreignPrice = (await catalog(item, outsider)).latestPrice;
   expect(foreignPrice.unitPrice).toBe('1.01');
   expect(foreignPrice).not.toHaveProperty('requestNumber');

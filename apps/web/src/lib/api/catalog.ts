@@ -60,7 +60,12 @@ export interface CatalogItem extends NamedRecord {
     value: string | number;
     option: AttributeOption | null;
   }[];
-  latestPrice?: null;
+  latestPrice?: {
+    unitPrice: string;
+    createdAt: string;
+    supplier?: { id: number; name: string };
+    requestNumber?: string | null;
+  } | null;
   categoryIcon?: string | null;
   images?: CatalogImage[];
 }

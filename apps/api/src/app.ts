@@ -85,6 +85,10 @@ export function createApp({
   if (storage instanceof LocalStorage)
     app.get(mediaPath + '/*key', storage.serve);
   app.use(express.json());
+  app.use('/api/v1', (_req, res, next) => {
+    res.set('Cache-Control', 'private, no-store');
+    next();
+  });
   app.use('/api/v1', accessRoutes(), events, inbox, reports);
   app.use('/api/v1/data', data);
   app.use('/api/v1/settings', settings);

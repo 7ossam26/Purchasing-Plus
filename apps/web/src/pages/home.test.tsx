@@ -13,6 +13,7 @@ import {
 } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { createQueryClient } from '../app/query.js';
 import { AppProviders, routes } from '../app/routes.js';
@@ -340,4 +341,17 @@ describe('login API errors', () => {
       );
     },
   );
+});
+
+it.each([
+  ['/login', ar.auth.title],
+  ['/', ar.navigation.modules],
+])('checks accessibility at %s', async (path, heading) => {
+  setup(path!, (url) => {
+    if (url.endsWith('/me'))
+      return path === '/login' ? json({}, 401) : json(profile);
+    return json({ queues: [], items: [], unread: 0 });
+  });
+  await screen.findByRole('heading', { name: heading });
+  expect((await axe(document.body)).violations).toEqual([]);
 });

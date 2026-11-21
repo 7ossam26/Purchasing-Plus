@@ -175,8 +175,8 @@ export function openStream(
 
 export function startNotificationPurge(db: PrismaClient, clock: () => Date) {
   const run = () => {
-    void purgeNotifications(db, clock()).catch((error: unknown) => {
-      console.error('Notification purge failed', error);
+    void purgeNotifications(db, clock()).catch(() => {
+      console.error('Notification purge failed');
     });
   };
   run();

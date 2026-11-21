@@ -1,6 +1,7 @@
 import { formatDateTime } from '@purchasing-plus/shared';
 import {
   ar,
+  fulfilmentUi as fulfilment,
   purchasingUi as buying,
   requestUi as copy,
 } from '@purchasing-plus/shared/i18n/ar';
@@ -53,7 +54,11 @@ import { settingsApi } from '../../lib/api/settings.js';
 import { ItemEditor } from '../catalog/ItemEditor.js';
 
 import { QuantityField, RequestFields, UrgencyChoices } from './forms.js';
+import { PricingApproval } from './pricing-approval.js';
 import { PurchasingTab } from './purchasing-tab.js';
+import { usePurchaseWrites } from './purchasing-writes.js';
+import { ReceiptTab } from './receipt.js';
+import { ResolveItem } from './remaining-items.js';
 import { ItemRows, RequestHeader, StageRail, Timeline } from './summary.js';
 import {
   draftForm,
@@ -166,13 +171,21 @@ export function RequestDetailPage() {
   const prompt = usePrompt();
   const updates = useRequestUpdates(request.id);
   const [params] = useSearchParams();
-  const [tab, setTab] = useState(() =>
-    params.get('tab') === 'purchasing' ? 'purchasing' : 'items',
-  );
+  const [tab, setTab] = useState(() => params.get('tab') ?? 'items');
   const [jump, setJump] = useState(0);
   const [mode, setMode] = useState<Mode>();
+  const [copySelection, setCopySelection] = useState<number[]>();
   const canTimeline = useCan('requests.viewTimeline');
   const canPurchase = useCanAny(purchasingKeys);
+  const canReceipt = useCanOnSite('receipt.record', request.siteId);
+  const canApprovePricing = useCanOnSite('pricing.approve', request.siteId);
+  const canRejectPricing = useCanOnSite('pricing.reject', request.siteId);
+  const showRounds = canApprovePricing || canRejectPricing;
+  const feeInRound = request.rounds?.some(
+    (round) =>
+      round.status === 'PENDING' && round.deliveryFee === request.deliveryFee,
+  );
+  const purchaseWrite = usePurchaseWrites(request);
   const canBrowse = useCan('catalog.view');
   const createCatalog = useCanOnSite('catalog.create', request.siteId);
   const timeline = useQuery({
@@ -185,6 +198,13 @@ export function RequestDetailPage() {
     queryFn: ({ signal }) => settingsApi.get(signal),
   });
   const options = useOptions();
+  const cancelRequest = useMutation({
+    mutationFn: (reason: string) =>
+      purchaseWrite((version) =>
+        requestApi.command(request.id, 'cancel', { version, reason }),
+      ),
+    onSuccess: () => toast.success(fulfilment.cancelled),
+  });
   const write = useMutation({
     mutationFn: async ({ perform }: Write) => {
       await client.cancelQueries({ queryKey: requestKey(request.id) });
@@ -219,7 +239,12 @@ export function RequestDetailPage() {
   function saveCommand(
     command: RequestCommand,
     success: string,
-    body: { reason?: string; urgency?: Urgency; siteId?: number } = {},
+    body: {
+      reason?: string;
+      urgency?: Urgency;
+      siteId?: number;
+      itemIds?: number[];
+    } = {},
     copyDraft = false,
   ) {
     write.mutate({
@@ -244,6 +269,28 @@ export function RequestDetailPage() {
         }
       },
     });
+  }
+  async function cancel() {
+    const reason = await prompt({
+      title: fulfilment.cancel,
+      description: fulfilment.cancelConsequence,
+      confirmLabel: fulfilment.cancelConfirm,
+      mode: 'reason',
+      tone: 'danger',
+    });
+    if (reason !== null) cancelRequest.mutate(reason);
+  }
+  function copyLines(itemIds?: number[]) {
+    if (
+      options.data?.sites.some(
+        (site) => site.id === request.siteId && site.isActive,
+      )
+    )
+      saveCommand('copy', copy.copied, { itemIds }, true);
+    else {
+      setCopySelection(itemIds);
+      setMode('copySite');
+    }
   }
   async function decide(verb: 'approve' | 'reject' | 'return') {
     if (verb === 'approve') {
@@ -375,15 +422,12 @@ export function RequestDetailPage() {
     },
     copyRequest: {
       label: copy.copy,
-      go: () => {
-        if (
-          options.data?.sites.some(
-            (site) => site.id === request.siteId && site.isActive,
-          )
-        )
-          saveCommand('copy', copy.copied, {}, true);
-        else setMode('copySite');
-      },
+      go: () => copyLines(),
+      overflow: true,
+    },
+    cancel: {
+      label: fulfilment.cancel,
+      go: () => void cancel(),
       overflow: true,
     },
   };
@@ -394,7 +438,7 @@ export function RequestDetailPage() {
       id: action,
       label: handler.label,
       onClick: handler.go,
-      loading: write.isPending,
+      loading: write.isPending || cancelRequest.isPending,
       variant: hint === 'danger' ? 'danger-outline' : undefined,
     };
     return [{ bar, hint, overflow: handler.overflow }];
@@ -412,12 +456,21 @@ export function RequestDetailPage() {
       ? 'timeline'
       : tab === 'purchasing' && canPurchase
         ? 'purchasing'
-        : 'items';
+        : tab === 'receipt' && canReceipt
+          ? 'receipt'
+          : 'items';
   const purchasingSelected = shownTab === 'purchasing';
+  const tabHasToolbar =
+    purchasingSelected ||
+    shownTab === 'receipt' ||
+    (shownTab === 'items' &&
+      !revision &&
+      (hasAction(request, 'approvePricing') ||
+        hasAction(request, 'rejectPricing')));
   const toolbar = (
     <ActionBar
       stickyOnDesktop
-      sticky={!purchasingSelected}
+      sticky={!tabHasToolbar}
       primary={primary?.bar}
       secondary={inline.map((action) => action.bar)}
       overflow={overflow.map((action) => action.bar)}
@@ -446,14 +499,25 @@ export function RequestDetailPage() {
       )}
     </>
   ) : (
-    <ItemRows
-      request={request}
-      convert={
-        createCatalog && hasAction(request, 'addToCatalog') && !draft.dirty
-          ? (id) => void navigate(requestHref(request.id) + '/catalog/' + id)
-          : undefined
-      }
-    />
+    <div className="grid gap-3">
+      {shownTab === 'items' && showRounds && (
+        <PricingApproval request={request} write={purchaseWrite} />
+      )}
+      <ItemRows
+        request={request}
+        showDeliveryFee={!showRounds || !feeInRound}
+        renderActions={(line) => (
+          <ResolveItem request={request} line={line} write={purchaseWrite} />
+        )}
+        copyRejected={hasAction(request, 'copyRequest') ? copyLines : undefined}
+        copyBusy={write.isPending}
+        convert={
+          createCatalog && hasAction(request, 'addToCatalog') && !draft.dirty
+            ? (id) => void navigate(requestHref(request.id) + '/catalog/' + id)
+            : undefined
+        }
+      />
+    </div>
   );
   return (
     <article className={area}>
@@ -517,7 +581,7 @@ export function RequestDetailPage() {
           )}
         </dl>
       )}
-      {purchasingSelected && toolbar}
+      {tabHasToolbar && toolbar}
       <Tabs
         label={copy.tabs}
         value={shownTab}
@@ -540,8 +604,20 @@ export function RequestDetailPage() {
                     <PurchasingTab
                       request={request}
                       active={purchasingSelected}
+                      write={purchaseWrite}
                       template={settings.data?.rfqIntro}
                     />
+                  ),
+                },
+              ]
+            : []),
+          ...(canReceipt && !revision
+            ? [
+                {
+                  id: 'receipt',
+                  label: fulfilment.receipt,
+                  content: (
+                    <ReceiptTab request={request} write={purchaseWrite} />
                   ),
                 },
               ]
@@ -606,7 +682,7 @@ export function RequestDetailPage() {
           ]}
         />
       ) : (
-        !purchasingSelected && toolbar
+        !tabHasToolbar && toolbar
       )}
       {mode === 'urgency' && (
         <UrgencySheet
@@ -658,7 +734,7 @@ export function RequestDetailPage() {
                       saveCommand(
                         'copy',
                         copy.copied,
-                        { siteId: Number(siteId) },
+                        { siteId: Number(siteId), itemIds: copySelection },
                         true,
                       );
                   }}

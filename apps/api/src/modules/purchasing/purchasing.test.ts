@@ -272,7 +272,7 @@ async function version(r: Record) {
   return (await db.request.findUniqueOrThrow({ where: { id: r.id } })).version;
 }
 
-it('searches active suppliers across categories only for a pricing viewer within the request site', async () => {
+it('searches active suppliers across categories for pricing and remaining-item handlers in scope', async () => {
   const r = await atPurchasing(1);
   const directory = pp(r, '/suppliers');
   const { body } = await send(
@@ -294,6 +294,8 @@ it('searches active suppliers across categories only for a pricing viewer within
     (await send('get', directory + '?q=2015').expect(200)).body.items,
   ).toEqual([]);
   await send('get', directory, undefined, reader).expect(403);
+  await send('get', directory, undefined, suppliersViewer).expect(403);
+  await send('get', directory, undefined, manager).expect(200);
   await send('get', directory, undefined, outsider).expect(404);
   await send('get', directory + '?page=0').expect(422);
 });

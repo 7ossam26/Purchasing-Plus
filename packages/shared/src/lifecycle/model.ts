@@ -207,6 +207,9 @@ export function outstanding(
 ) {
   return new Decimal(item.quantity).minus(item.receivedQty).toFixed(2);
 }
+export function validReceiptQuantity(value: string, remaining: string) {
+  return quantity.safeParse(value).success && new Decimal(value).lte(remaining);
+}
 export function sameDecimal(a: string | null, b: string | null) {
   return a === b || (a !== null && b !== null && new Decimal(a).eq(b));
 }

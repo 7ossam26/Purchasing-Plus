@@ -17,7 +17,9 @@ import {
   quantity,
   sumAmounts,
   unitPrice,
+  validReceiptQuantity,
   type ItemState,
+  type PricingRound,
   type RequestItem,
   type RequestState,
   type RoundLine,
@@ -331,13 +333,16 @@ export const rejectPricing = action(
       { roundNo: i.roundNo, reason: i.reason },
       lines.map((l) => l.itemId),
     );
-    if (
-      i.roundNo === 1 &&
-      !ctx.state.rounds.some((r) => r.status === 'APPROVED')
-    )
+    if (rejectingRoundEndsRequest(i.roundNo, ctx.state.rounds))
       finish(ctx, 'REJECTED');
   },
 );
+export function rejectingRoundEndsRequest(
+  roundNo: number,
+  rounds: ReadonlyArray<Pick<PricingRound, 'status'>>,
+) {
+  return roundNo === 1 && !rounds.some((round) => round.status === 'APPROVED');
+}
 const pendingOrderRules = {
   key: 'purchasing.sendSupplyOrder',
   statuses: fulfilment,
@@ -394,7 +399,7 @@ export const recordReceipt = action(
     unique(i.lines.map((l) => l.itemId));
     const lines = i.lines.map((l) => {
       const item = target(ctx.state, l.itemId, 'AWAITING_RECEIPT');
-      if (new Decimal(l.quantity).gt(outstanding(item)))
+      if (!validReceiptQuantity(l.quantity, outstanding(item)))
         refuse('INVALID_QUANTITY');
       item.receivedQty = new Decimal(item.receivedQty)
         .plus(l.quantity)

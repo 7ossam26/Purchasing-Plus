@@ -16,6 +16,12 @@ import type {
 
 import type { CatalogItem, NamedRecord } from './catalog.js';
 import { api } from './client.js';
+import type {
+  ActorSnapshot,
+  Receipt,
+  RoundSummary,
+  SupplyOrder,
+} from './fulfilment.js';
 import { recordPath, type RecordPage } from './records.js';
 
 type Named = Pick<NamedRecord, 'id' | 'name'>;
@@ -29,6 +35,8 @@ export type RequestLine = Omit<
   lineTotal?: string | null;
   unitPrice?: string | null;
   pricedQuantity?: string | null;
+  outstanding?: string;
+  resolvedBy?: ActorSnapshot;
 };
 export type RequestDto = {
   id: number;
@@ -54,6 +62,9 @@ export type RequestDto = {
   displayedStage: DisplayedStage;
   stageStartedAt: string | null;
   stateCounts: Record<ItemState, number>;
+  rounds?: RoundSummary[];
+  supplyOrders?: SupplyOrder[];
+  receipts?: Receipt[];
   items: RequestLine[];
   availableActions: { action: ActionName; hint: ActionHint }[];
 };
@@ -82,6 +93,7 @@ export type RequestCommand =
   | 'return'
   | 'urgency'
   | 'copy'
+  | 'cancel'
   | 'pause'
   | 'resume'
   | 'purchasing-return';
@@ -114,6 +126,8 @@ export const requestApi = {
       reason?: string;
       urgency?: Urgency;
       siteId?: number;
+      itemIds?: number[];
+      roundNo?: number;
     },
   ) => api<RequestDto>(path(id) + '/' + command, { method: 'POST', body }),
   remove: (id: number, version: number) =>

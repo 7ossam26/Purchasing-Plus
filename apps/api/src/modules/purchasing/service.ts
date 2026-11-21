@@ -14,7 +14,7 @@ import {
 } from '@purchasing-plus/shared/lifecycle';
 import type { z } from 'zod';
 
-import { allowed, missing } from '../../middleware/access.js';
+import { allowed, forbidden, missing } from '../../middleware/access.js';
 import { AppError } from '../../middleware/errors.js';
 import type { Context } from '../access/endpoint.js';
 import { hydrateLines, invalidLine } from '../requests/catalog.js';
@@ -51,6 +51,11 @@ export async function searchSuppliers(
   id: number,
   read: () => z.output<typeof purchasingSupplierInput>,
 ) {
+  if (
+    !allowed(ctx.viewer, 'purchasing.price') &&
+    !allowed(ctx.viewer, 'purchasing.handleRemaining')
+  )
+    throw forbidden();
   await loadRequestInScope(ctx.tx, id, ctx.viewer);
   const { page, pageSize, q } = read();
   const result = await repo.searchSuppliers(ctx.tx, page, pageSize, q);

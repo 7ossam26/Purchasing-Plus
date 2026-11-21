@@ -41,7 +41,11 @@ import { SupplierPhone } from './purchasing-rfq.js';
 import type { PurchaseWrite } from './purchasing-writes.js';
 import { hasAction } from './workspace.js';
 
-export function PurchaseLineTitle({ line }: { line: PurchasingLine }) {
+export function PurchaseLineTitle({
+  line,
+}: {
+  line: Pick<PurchasingLine, 'lineNo' | 'snapshot' | 'specs' | 'quantity'>;
+}) {
   return (
     <span className="grid min-w-0 gap-0.5">
       <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -71,7 +75,7 @@ export function PurchaseLineFlags({ line }: { line: PurchasingLine }) {
       {line.modifiedAfterSend && (
         <StatusMessage>{copy.modifiedAfterSend}</StatusMessage>
       )}
-      {line.state === 'UNAVAILABLE' && <StatusChip status="UNAVAILABLE" />}
+      <StatusChip status={line.state} />
     </>
   );
 }
@@ -83,7 +87,7 @@ function StatusMessage({ children }: { children: string }) {
   );
 }
 
-function SupplierPicker({
+export function SupplierPicker({
   id,
   category,
   onPick,
@@ -240,9 +244,7 @@ function PricingLine({
   const [picker, setPicker] = useState(false);
   const prompt = usePrompt();
   const isUnavailable = line.state === 'UNAVAILABLE';
-  const canPrice = isUnavailable
-    ? hasAction(data, 'priceUnavailable')
-    : line.state === 'OPEN' && hasAction(data, 'savePricingDraft');
+  const canPrice = line.state === 'OPEN' && hasAction(data, 'savePricingDraft');
   const canMark = line.state === 'OPEN' && hasAction(data, 'markUnavailable');
   const canRestore = isUnavailable && hasAction(data, 'markAvailable');
   const availability = useMutation({

@@ -90,7 +90,7 @@ function Question({ request }: { request: Pending }) {
   const [value, setValue] = useState(options.initialValue ?? '');
   const reason = options.mode === 'reason';
   const password = options.mode === 'password';
-  const required = reason || options.required;
+  const required = options.required ?? reason;
   const blocked =
     isPrompt && (password ? value.length < 8 : required && !value.trim());
   const Control = reason ? Textarea : Input;
@@ -115,7 +115,7 @@ function Question({ request }: { request: Pending }) {
             }
             required={required}
             hint={
-              reason
+              reason && required
                 ? ar.dialogs.reasonHint
                 : password
                   ? ar.auth.passwordHint
@@ -139,6 +139,7 @@ function Question({ request }: { request: Pending }) {
                 <Control
                   {...props}
                   data-initial-focus
+                  maxLength={reason ? 4000 : undefined}
                   value={value}
                   onChange={(event) => setValue(event.currentTarget.value)}
                 />

@@ -35,7 +35,7 @@ import {
 
 import type { PurchaseWrite } from './purchasing-writes.js';
 
-async function copyText(text: string, message: string) {
+export async function copyText(text: string, message: string) {
   try {
     if (navigator.clipboard?.writeText)
       await navigator.clipboard.writeText(text);

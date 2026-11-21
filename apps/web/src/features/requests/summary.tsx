@@ -4,18 +4,30 @@ import {
   formatMoney,
   formatNumber,
 } from '@purchasing-plus/shared';
-import { ar, requestUi as copy } from '@purchasing-plus/shared/i18n/ar';
+import {
+  ar,
+  fulfilmentUi as fulfilment,
+  requestUi as copy,
+} from '@purchasing-plus/shared/i18n/ar';
 import {
   isAging,
+  itemStates,
   statusMap,
   type DisplayedStage,
-  type ItemState,
 } from '@purchasing-plus/shared/lifecycle';
 import { Check, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 
+import { useCanOnSite } from '../../app/session.js';
+import { Button } from '../../components/ui/button.js';
 import { Chip, StatusChip } from '../../components/ui/chip.js';
 import { EmptyState } from '../../components/ui/states.js';
-import type { RequestDto, RequestEvent } from '../../lib/api/requests.js';
+import type { ActorSnapshot } from '../../lib/api/fulfilment.js';
+import type {
+  RequestDto,
+  RequestEvent,
+  RequestLine,
+} from '../../lib/api/requests.js';
 
 const stages = [
   'DRAFT',
@@ -132,13 +144,6 @@ function RailCaption({
     </>
   );
 }
-const openStates: ItemState[] = [
-  'OPEN',
-  'UNAVAILABLE',
-  'AWAITING_APPROVAL',
-  'AWAITING_RECEIPT',
-  'REMAINING',
-];
 export function RequestFacts({
   request,
   agingDays,
@@ -148,7 +153,9 @@ export function RequestFacts({
   agingDays?: number;
   showTime?: boolean;
 }) {
-  const open = openStates.filter((state) => request.stateCounts[state] > 0);
+  const present = itemStates.filter(
+    (state) => state !== 'REMOVED' && request.stateCounts[state] > 0,
+  );
   const aging =
     agingDays !== undefined &&
     isAging(request.stageStartedAt, new Date(), agingDays);
@@ -163,8 +170,8 @@ export function RequestFacts({
         <StatusChip status={request.urgency} />
         {request.isModified && <Chip>{copy.modified}</Chip>}
         {aging && <StatusChip status="OVERDUE" />}
-        {open.length > 1 &&
-          open.map((state) => (
+        {present.length > 1 &&
+          present.map((state) => (
             <StatusChip
               key={state}
               status={state}
@@ -187,6 +194,10 @@ export function RequestHeader({
   request: RequestDto;
   agingDays?: number;
 }) {
+  const decision = request.rounds
+    ?.filter((round) => round.decidedBy && round.decidedAt)
+    .sort((a, b) => (a.decidedAt ?? '').localeCompare(b.decidedAt ?? ''))
+    .at(-1);
   return (
     <header className="grid gap-2">
       <h1 className="numeric wrap-anywhere text-title sm:text-title-wide">
@@ -197,23 +208,72 @@ export function RequestHeader({
         )}
       </h1>
       <RequestFacts request={request} agingDays={agingDays} />
+      {decision?.decidedBy && (
+        <p
+          className={`flex flex-wrap gap-x-2 rounded-panel border p-3 text-small font-bold ${decision.status === 'APPROVED' ? 'border-ppr bg-ppr-wash text-ppr-deep' : 'border-danger-fg bg-danger-bg text-danger-fg'}`}
+        >
+          <span>
+            {decision.status === 'APPROVED'
+              ? fulfilment.approvedBy
+              : fulfilment.rejectedBy}{' '}
+            <Actor attribution={decision.decidedBy} />
+          </span>
+          {decision.decidedAt && (
+            <time dateTime={decision.decidedAt}>
+              {formatDateTime(decision.decidedAt)}
+            </time>
+          )}
+        </p>
+      )}
     </header>
+  );
+}
+function Actor({ attribution }: { attribution: ActorSnapshot }) {
+  return (
+    <>
+      <bdi className="wrap-anywhere">{attribution.name}</bdi>
+      {attribution.roleName && (
+        <>
+          {' '}
+          (<bdi className="wrap-anywhere">{attribution.roleName}</bdi>)
+        </>
+      )}
+    </>
   );
 }
 export function ItemRows({
   request,
   convert,
+  renderActions,
+  copyRejected,
+  copyBusy,
+  showDeliveryFee = true,
 }: {
   request: RequestDto;
   convert?: (id: number) => void;
+  renderActions?: (line: RequestLine) => ReactNode;
+  copyRejected?: (ids: number[]) => void;
+  copyBusy?: boolean;
+  showDeliveryFee?: boolean;
 }) {
+  const canViewPrices = useCanOnSite('requests.viewPrices', request.siteId);
+  const rejected = request.items.filter((line) => line.state === 'REJECTED');
+  const reasons = new Map(
+    request.rounds?.flatMap((round) =>
+      round.status === 'REJECTED'
+        ? round.itemIds.map((id) => [id, round.reason] as const)
+        : [],
+    ) ?? [],
+  );
   if (!request.items.length) return <EmptyState title={copy.emptyItems} />;
   return (
     <div className="grid gap-2">
       <ol className="divide-y divide-seam rounded-panel border border-seam bg-paper">
         {request.items.map((line) => (
           <li key={line.id} className="grid gap-2 p-3 sm:p-4">
-            <div className="flex items-start gap-2">
+            <div
+              className={`flex items-start gap-2 ${line.state === 'REJECTED' ? 'text-concrete line-through' : ''}`}
+            >
               <span className="numeric grid size-7 shrink-0 place-items-center rounded-control bg-plaster text-small text-concrete">
                 {formatNumber(line.lineNo)}
               </span>
@@ -239,7 +299,7 @@ export function ItemRows({
                   {line.supplierName}
                 </bdi>
               )}
-              {line.lineTotal && (
+              {canViewPrices && line.lineTotal && (
                 <span className="text-small">
                   {copy.price} <bdi>{formatMoney(line.lineTotal)}</bdi>
                 </span>
@@ -253,11 +313,33 @@ export function ItemRows({
                   {copy.addToCatalog}
                 </button>
               )}
+              {renderActions?.(line)}
             </div>
+            {line.state === 'REJECTED' && reasons.get(line.id) && (
+              <p className="whitespace-pre-wrap wrap-anywhere text-small text-danger-fg">
+                <strong>{fulfilment.rejectionReason}</strong> ·{' '}
+                {reasons.get(line.id)}
+              </p>
+            )}
+            {line.resolvedBy && (
+              <p className="text-small text-ppr-deep">
+                {fulfilment.resolvedBy} <Actor attribution={line.resolvedBy} />
+              </p>
+            )}
           </li>
         ))}
       </ol>
-      {request.deliveryFee && (
+      {copyRejected && rejected.length > 0 && (
+        <Button
+          variant="secondary"
+          className="justify-self-start"
+          loading={copyBusy}
+          onClick={() => copyRejected(rejected.map((line) => line.id))}
+        >
+          {fulfilment.copyRejected}
+        </Button>
+      )}
+      {canViewPrices && showDeliveryFee && request.deliveryFee && (
         <p className="rounded-control border border-seam bg-paper p-3 text-small">
           {copy.deliveryFee} <bdi>{formatMoney(request.deliveryFee)}</bdi>
         </p>

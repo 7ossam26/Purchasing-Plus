@@ -8,6 +8,7 @@ export { catalogConversionItem, copyableItems } from './request.js';
 export {
   isPricingCandidate,
   pricingDraftAction,
+  rejectingRoundEndsRequest,
   wasBatchSent,
   wasSupplyOrderSent,
 } from './purchasing.js';

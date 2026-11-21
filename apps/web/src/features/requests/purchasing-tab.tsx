@@ -35,7 +35,9 @@ import {
   SendBatchSheet,
   SentHistory,
 } from './purchasing-rfq.js';
-import { usePurchaseWrites, type PurchaseWrite } from './purchasing-writes.js';
+import type { PurchaseWrite } from './purchasing-writes.js';
+import { RemainingItems } from './remaining-items.js';
+import { SupplyOrders } from './supply-orders.js';
 import { hasAction } from './workspace.js';
 
 function PendingPurchaseGuard() {
@@ -46,10 +48,12 @@ export function PurchasingTab({
   request,
   active,
   template,
+  write,
 }: {
   request: RequestDto;
   active: boolean;
   template?: string;
+  write: PurchaseWrite;
 }) {
   const query = useQuery({
     queryKey: purchasingKey(request.id),
@@ -58,7 +62,10 @@ export function PurchasingTab({
   });
   const canRfq = useCanOnSite('purchasing.sendRfq', request.siteId);
   const canPrice = useCanOnSite('purchasing.price', request.siteId);
-  const write = usePurchaseWrites(request);
+  const canSendOrders = useCanOnSite(
+    'purchasing.sendSupplyOrder',
+    request.siteId,
+  );
   const [mode, setMode] = useState(canPrice && !canRfq ? 'price' : 'rfq');
   const [states, setStates] = useState<Record<string, SaveStatus>>({});
   const report = useCallback((key: string, status: SaveStatus | null) => {
@@ -89,6 +96,12 @@ export function PurchasingTab({
     <div className="grid min-w-0 gap-2">
       {saveStatus.length > 0 && <PendingPurchaseGuard />}
       <InlineError error={query.error} retry={() => void query.refetch()} />
+      {canSendOrders && <SupplyOrders request={request} write={write} />}
+      <RemainingItems
+        request={request}
+        suppliers={data.suppliers ?? []}
+        write={write}
+      />
       {pricing ? (
         <Tabs
           label={copy.modes}

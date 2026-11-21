@@ -50,7 +50,7 @@ purchasing.get(
 );
 purchasing.get(
   '/suppliers',
-  ...endpoint(['purchasing.price', 'requests.viewSupplierNames'], (ctx) =>
+  ...endpoint(['requests.viewSupplierNames'], (ctx) =>
     service.searchSuppliers(ctx, id(ctx), () =>
       schemas.purchasingSupplierInput.parse(ctx.req.query),
     ),

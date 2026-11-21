@@ -39,6 +39,7 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
       thresholds: {
         'packages/shared/src/**': { lines: 90 },
+        'packages/shared/src/lifecycle/**': { lines: 95 },
         'apps/api/src/modules/**/service.ts': { lines: 80 },
       },
     },

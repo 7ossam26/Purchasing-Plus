@@ -41,7 +41,7 @@ export function formatDateTime(value: DateValue) {
   return dateTime.format(instant(value));
 }
 
-function cairoDay(value: Date) {
+export function cairoDay(value: Date) {
   const parts = calendar.formatToParts(value);
   const read = (type: Intl.DateTimeFormatPartTypes) =>
     Number(parts.find((part) => part.type === type)?.value);

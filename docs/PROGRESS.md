@@ -138,3 +138,35 @@ All endpoints are under `/api/v1`.
 - **Dependencies.** Sharp and heic-convert process images, file-type sniffs signatures, Busboy bounds multipart input, and the AWS S3 SDK and presigner implement R2. The small HEIC fixture was generated for this repository and runs through the real decoder.
 - **Verification.** Lint, typecheck, production builds and 175 Vitest tests passed. The R2 contract uses a mocked client. Chromium at 360 px with touch emulation verified upload of a generated 12 megapixel HEIC to real local storage, WebP display, folder thumbnails, pinch zoom and double-tap zoom. The client view was also checked at desktop width. A physical iPhone was unavailable for verification.
 - **Open questions.** O-1 remains open. The same driver supports a public R2 domain and a private bucket.
+
+## P07 — Lifecycle core (2026-11-21)
+
+Import the rules from `@purchasing-plus/shared/lifecycle`. `RequestState` carries the request, item flags and quantities, pricing rounds, RFQ batches and supply orders. `Viewer` accepts the P01 user ID, superadmin flag, permission set, site scope and site IDs. Creator actions still require ownership. T25 takes a null system actor.
+
+### Commands for P08–P13
+
+Each suffix below has two named functions. For example, `canRecordReceipt(state, viewer, input)` returns `{ ok: true }` or `{ ok: false, code, message }` with Arabic copy. `applyRecordReceipt(state, viewer, input, now)` enforces the same rules and returns `{ next, events, notify, priceRecords, copiedDraft? }`. A refusal throws `LifecycleError` with the same code and message. All commands take the expected `version`. A successful command advances it once, including when an automatic event follows the user action. Inputs and prior state remain usable after success or refusal.
+
+| Transitions | Function suffixes | Result or inputs of interest |
+|---|---|---|
+| T1–T5 | `SaveDraft`, `DeleteDraft`, `Submit`, `EditBeforeApproval`, `EditQuantities` | Start with `draftState(identity)` at version 0. Edits take `fields`, `add`, `remove` and `change`. Deletion returns `next.deleted` for hard deletion. Submit takes the transaction-allocated yearly sequence and formats the number using Cairo time. |
+| T6–T10 | `Approve`, `Reject`, `ReturnForEdit`, `Resubmit`, `RaiseUrgency` | Manager decisions, reasons, creator resubmission and the urgency lock. |
+| T11–T14 | `Pause`, `PurchasingReturnForEdit`, `EditWhilePaused`, `Resume` | Pause metadata, edit diff, invalidated draft prices and previously sent lines. |
+| T15–T16 | `CreateBatch`, `MarkBatchSent`, `SavePricingDraft`, `MarkUnavailable`, `MarkAvailable`, `SubmitPricing` | Batch and supplier selection, per-line draft or availability, and a frozen pricing round. Draft autosaves are quiet. The round event keeps its total and delivery fee separate. |
+| T17–T19 | `ApprovePricing`, `MarkSupplyOrderSent`, `RejectPricing`, `PriceUnavailable` | Decide a numbered round, record catalog unit prices and supplier orders, mark an order sent, or price a newly available line for another round. |
+| T20–T23 | `RecordReceipt`, `StillComing`, `RepriceRemaining`, `ResolveExternally` | Atomic receipt lines with an optional note, outstanding quantities, supplier-specific follow-up and closure. |
+| T24–T26 and copy | `Cancel`, `AutoComplete`, `EditDeliveryFee`, `CopyRequest` | Cancellation retains receipts. Closing the last line automatically emits the terminal event. Copy returns a separate draft and events for both requests. |
+
+`actions[name]` exposes the same `can` and `apply` functions. `ActionInput<Name>` gives the command-specific TypeScript input. Pass an explicit `Date` to reducers. The persistence layer owns ID allocation, current catalog snapshots at submission and edit, and active catalog lookups for copies. It must compare the stored version and persist the result, actor name and role snapshots, audit entry and notifications in one transaction. Resolve recipient rules with `matchesRecipient(intent, viewer)` and deduplicate by event and user. Publish after commit.
+
+### Queries and events
+
+- `availableActions(state, viewer)` returns ordered `{ action, hint }` entries for the action bar. The API can compute this before redacting sensitive fields from a response.
+- `deriveStage(state)` returns the displayed stage. `stateCounts(state)` returns counts for every item state. `stageStartedAt(events)` takes events in append order and returns the current stage's entry timestamp, or null for empty and final histories. `isAging(start, now, agingDays)` compares Cairo calendar days.
+- `inQueue(queue, state, viewer)` tests membership in `drafts`, `manager`, `purchasing`, `pricingApproval`, `receipt` or `paused`. `compareQueue(a, b)` orders rows with urgency and stage-start time.
+- `diffRequest(before, after)` returns the typed `EDITED` payload. `eventPayloadSchemas[type]` validates each of the 30 event payloads. `describeEvent(event)` renders the Arabic timeline sentence and accepts historical actor name and role snapshots. The schemas and formatter are also exported from `@purchasing-plus/shared/events`.
+- `openItem(data, lineNo)` initializes an unpriced line. `outstanding(item)` and `unitPrice(total, quantity)` return decimal strings. `sameDecimal`, `isClosed`, `isFinal`, `holds` and `inSite` return booleans. The shared package now uses the specified `decimal.js` dependency for arithmetic.
+
+**Open questions and decisions.** T16 permits submission with at least one priced line. If ordinary unpriced OPEN lines remain, purchasing can finish them during fulfilment. When only OPEN lines remain, the displayed stage is AT_PURCHASING and the purchasing queue includes them. T26 treats all three final statuses as read-only for fee edits. Draft deletion yields an audit operation for the adapter, since the event model defines no draft-deletion timeline event.
+
+**Verification.** Lint, typecheck, production builds and all 772 Vitest tests passed. The 597 new lifecycle tests cover the transition matrices, permissions, sites, event recipients, pricing and receipt sequences, Cairo midnight and DST. V8 measured 99.8% lifecycle line coverage against an enforced 95% threshold. The lifecycle tests run without a database. The existing API suite used isolated PostgreSQL 18.

@@ -18,6 +18,10 @@
       "types": "./src/lifecycle/index.ts",
       "default": "./dist/lifecycle/index.js"
     },
+    "./events": {
+      "types": "./src/events.ts",
+      "default": "./dist/events.js"
+    },
     "./i18n/ar": {
       "types": "./src/i18n/ar.ts",
       "default": "./dist/i18n/ar.js"
@@ -28,6 +32,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "decimal.js": "^10.6.0",
     "zod": "^4.6.7"
   }
 }

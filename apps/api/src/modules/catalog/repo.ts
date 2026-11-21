@@ -5,6 +5,8 @@ import type { Tx } from '../access/repo.js';
 import { imageSelection } from '../catalog-images/repo.js';
 import { visiblePath } from '../catalog-tree/repo.js';
 
+import { priceDetails } from './prices.js';
+
 const itemInclude = {
   node: { select: { path: true } },
   images: imageSelection,
@@ -26,6 +28,23 @@ const itemInclude = {
     },
   },
 } satisfies Prisma.CatalogItemInclude;
+
+export async function latestPrices(tx: Tx, ids: number[]) {
+  const rows = ids.length
+    ? await tx.catalogItem.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          prices: {
+            select: priceDetails,
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+          },
+        },
+      })
+    : [];
+  return new Map(rows.map((row) => [row.id, row.prices[0] ?? null]));
+}
 
 export type ItemRecord = Prisma.CatalogItemGetPayload<{
   include: typeof itemInclude;

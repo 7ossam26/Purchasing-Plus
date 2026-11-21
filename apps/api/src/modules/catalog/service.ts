@@ -25,6 +25,7 @@ import { activeNode, nodeWithBreadcrumb } from '../catalog-tree/service.js';
 import { activeUnit } from '../units/repo.js';
 import { listUnits } from '../units/service.js';
 
+import { toPriceDto } from './prices.js';
 import * as repo from './repo.js';
 
 type NewItem = z.infer<typeof createCatalogItem>;
@@ -125,7 +126,14 @@ export async function getItem(
     throw missing();
   return {
     ...(await attachImages(item!, row, req.app.locals.storage)),
-    ...(allowed(viewer, 'requests.viewPrices') ? { latestPrice: null } : {}),
+    ...(allowed(viewer, 'requests.viewPrices')
+      ? {
+          latestPrice: toPriceDto(
+            (await repo.latestPrices(tx, [id])).get(id) ?? null,
+            viewer,
+          ),
+        }
+      : {}),
   };
 }
 

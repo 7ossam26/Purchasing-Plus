@@ -21,9 +21,12 @@ import {
 } from '../../middleware/access.js';
 import type { Tx } from '../access/repo.js';
 import { visiblePath } from '../catalog-tree/repo.js';
+import { ordersInclude, receiptsInclude } from '../fulfilment/repo.js';
 import { batchSummary, roundState } from '../purchasing/repo.js';
 
 const include = {
+  supplyOrders: ordersInclude,
+  receipts: receiptsInclude,
   batches: batchSummary,
   rounds: roundState,
   items: {
@@ -31,17 +34,33 @@ const include = {
     include: { supplier: { select: { id: true, name: true } } },
     orderBy: { lineNo: 'asc' },
   },
-  site: { select: { id: true, name: true } },
+  site: { select: { id: true, name: true, address: true } },
   category: { select: { id: true, name: true } },
   creator: { select: { id: true, name: true } },
   approver: { select: { id: true, name: true } },
   pauser: { select: { id: true, name: true } },
   copiedFrom: { select: { siteId: true } },
   events: {
-    where: { type: 'RETURNED_FOR_EDIT' },
+    where: {
+      type: {
+        in: [
+          'RETURNED_FOR_EDIT',
+          'PRICING_APPROVED',
+          'PRICING_REJECTED',
+          'ITEM_RESOLVED_EXTERNALLY',
+        ],
+      },
+    },
     orderBy: { id: 'desc' },
-    take: 1,
-    select: { payload: true },
+    select: {
+      type: true,
+      payload: true,
+      itemIds: true,
+      actorId: true,
+      actorName: true,
+      actorRoleName: true,
+      at: true,
+    },
   },
 } satisfies Prisma.RequestInclude;
 export type RequestRecord = Prisma.RequestGetPayload<{
@@ -52,14 +71,14 @@ export async function loadRequestInScope(
   tx: Tx,
   requestId: number,
   viewer: Viewer,
-  lock = false,
+  lock: 'read' | 'write' = 'read',
 ) {
-  if (lock) {
-    const matches = await tx.$queryRaw<{ id: number }[]>(Prisma.sql`
-      SELECT id FROM "Request" WHERE id = ${requestId} AND ${siteSql(viewer)} FOR UPDATE
-    `);
-    if (!matches.length) throw missing();
-  }
+  // Hold the request stable while Prisma loads its related lines, decisions and receipts.
+  const mode = lock === 'write' ? Prisma.sql`FOR UPDATE` : Prisma.sql`FOR SHARE`;
+  const matches = await tx.$queryRaw<{ id: number }[]>(Prisma.sql`
+    SELECT id FROM "Request" WHERE id = ${requestId} AND ${siteSql(viewer)} ${mode}
+  `);
+  if (!matches.length) throw missing();
   const row = await tx.request.findFirst({
     where: { id: requestId, ...siteWhere(viewer) },
     include,
@@ -113,9 +132,11 @@ export function toState(row: RequestRecord): RequestState {
     approvedById,
     copiedFromId,
     deleted: false,
-    rounds: rounds.map(({ items, ...round }) => ({
-      ...round,
-      decidedAt: round.decidedAt?.toISOString() ?? null,
+    rounds: rounds.map(({ items, number, status, decidedAt, decidedById }) => ({
+      number,
+      status,
+      decidedById,
+      decidedAt: decidedAt?.toISOString() ?? null,
       lines: items.map((line) => ({
         ...line,
         lineTotal: line.lineTotal.toFixed(2),
@@ -128,7 +149,21 @@ export function toState(row: RequestRecord): RequestState {
       supplierIds: batch.suppliers.map((s) => s.supplierId),
       sentTo: batch.suppliers.flatMap((s) => (s.sentAt ? [s.supplierId] : [])),
     })),
-    supplyOrders: supplyOrders as unknown as RequestState['supplyOrders'],
+    supplyOrders: supplyOrders.map((order) => ({
+      number: order.number,
+      supplierId: order.supplierId,
+      sent: order.sentAt !== null,
+      lines: order.items.map(
+        ({ itemId, lineNo, catalogItemId, lineTotal, quantity }) => ({
+          itemId,
+          lineNo,
+          catalogItemId,
+          supplierId: order.supplierId,
+          lineTotal: lineTotal.toFixed(2),
+          quantity: quantity.toFixed(2),
+        }),
+      ),
+    })),
     items: items.map(
       ({
         snapshot: json,
@@ -239,7 +274,6 @@ function requestData(state: RequestState, now: Date, previous?: RequestRecord) {
     pauseReason,
     approvedById,
     copiedFromId,
-    supplyOrders,
   } = state;
   const displayedStage = deriveStage(state);
   return {
@@ -261,10 +295,6 @@ function requestData(state: RequestState, now: Date, previous?: RequestRecord) {
     pauseReason,
     approvedById,
     copiedFromId,
-    supplyOrders: supplyOrders.map((order) => ({
-      ...order,
-      lines: order.lines.map((line) => ({ ...line })),
-    })),
     submittedAt: previous?.submittedAt ?? (state.number ? now : null),
     displayedStage,
     stageStartedAt:
@@ -432,9 +462,7 @@ export function purchasingQueueWhere(viewer: Viewer): Prisma.RequestWhereInput {
       ...(rule.items
         ? { items: { some: { state: { in: [...rule.items] } } } }
         : {}),
-      ...(rule.unsentOrder
-        ? { supplyOrders: { array_contains: [{ sent: false }] } }
-        : {}),
+      ...(rule.unsentOrder ? { supplyOrders: { some: { sentAt: null } } } : {}),
     }));
   return branches.length ? { OR: branches } : { id: { in: [] } };
 }

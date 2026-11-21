@@ -26,6 +26,7 @@ export const actions = {
   markAvailable: buying.markAvailable,
   priceUnavailable: buying.priceUnavailable,
   markSupplyOrderSent: buying.markSupplyOrderSent,
+  editSupplyOrderMessage: buying.editSupplyOrderMessage,
   stillComing: buying.stillComing,
   repriceRemaining: buying.repriceRemaining,
   resolveExternally: buying.resolveExternally,
@@ -101,6 +102,10 @@ export const { can: canRejectPricing, apply: applyRejectPricing } =
   actions.rejectPricing;
 export const { can: canPriceUnavailable, apply: applyPriceUnavailable } =
   actions.priceUnavailable;
+export const {
+  can: canEditSupplyOrderMessage,
+  apply: applyEditSupplyOrderMessage,
+} = actions.editSupplyOrderMessage;
 export const { can: canMarkSupplyOrderSent, apply: applyMarkSupplyOrderSent } =
   actions.markSupplyOrderSent;
 export const { can: canRecordReceipt, apply: applyRecordReceipt } =

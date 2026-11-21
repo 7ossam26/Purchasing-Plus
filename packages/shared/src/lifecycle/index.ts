@@ -9,6 +9,7 @@ export {
   isPricingCandidate,
   pricingDraftAction,
   wasBatchSent,
+  wasSupplyOrderSent,
 } from './purchasing.js';
 export { LifecycleError, matchesRecipient } from './engine.js';
 export type {

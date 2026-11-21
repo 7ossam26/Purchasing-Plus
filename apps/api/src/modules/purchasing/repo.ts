@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { RequestState } from '@purchasing-plus/shared/lifecycle';
 
 import type { Tx } from '../access/repo.js';
@@ -65,6 +65,8 @@ export const roundState = {
     status: true,
     decidedAt: true,
     decidedById: true,
+    deliveryFee: true,
+    submittedAt: true,
     items: {
       orderBy: { lineNo: 'asc' },
       select: {
@@ -181,10 +183,18 @@ export async function persistRounds(
       former.decidedAt !== decidedAt ||
       former.decidedById !== decidedById
     ) {
-      await tx.pricingRound.update({
+      const updated = await tx.pricingRound.update({
         where: { requestId_number: { requestId: after.id, number } },
         data: { status, decidedAt, decidedById },
       });
+      // Freeze the comparison for the entire decision before appending its price records.
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "PricingRoundItem" line SET "previousPriceId" = (
+          SELECT price.id FROM "CatalogItemPrice" price
+          WHERE price."itemId" = line."catalogItemId"
+          ORDER BY price."createdAt" DESC, price.id DESC LIMIT 1
+        ) WHERE line."roundId" = ${updated.id} AND line."catalogItemId" IS NOT NULL
+      `);
     }
   }
 }

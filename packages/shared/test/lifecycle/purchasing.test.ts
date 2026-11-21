@@ -4,6 +4,30 @@ import * as life from '../../src/lifecycle/index.js';
 
 import { data, fixture, now, sample, viewer } from './fixtures.js';
 
+it.each([
+  ['1.01', '0.00', '1.01', null],
+  ['1.00', '1.00', '0.00', '0.00'],
+  ['2.00', '3.00', '-1.00', '-33.33'],
+  ['1.01', '1.00', '0.01', '1.00'],
+])('compares unit prices %s and %s', (current, previous, amount, percent) => {
+  expect(life.priceChange(current!, previous!)).toEqual({ amount, percent });
+});
+
+it('checks the automatic outcome after a fulfilment fee edit', () => {
+  const s = fixture('FULFILMENT', 'RECEIVED');
+  const result = life.applyEditDeliveryFee(
+    s,
+    viewer,
+    { version: s.version, deliveryFee: '5.00' },
+    now,
+  );
+  expect(result.events.map((e) => e.type)).toEqual([
+    'DELIVERY_FEE_CHANGED',
+    'COMPLETED',
+  ]);
+  expect(result.next.status).toBe('COMPLETED');
+});
+
 it('refuses a catalog price that would overflow the money column for a fractional quantity', () => {
   const s = fixture('AT_PURCHASING');
   s.items[0]!.quantity = '0.01';
@@ -133,6 +157,8 @@ it('keeps unavailable items, freezes round totals, and generates supplier orders
   ]);
   expect(approved.priceRecords).toEqual([
     {
+      requestItemId: 11,
+      source: 'APPROVED',
       catalogItemId: 111,
       supplierId: 8,
       lineTotal: '1.02',
@@ -140,6 +166,8 @@ it('keeps unavailable items, freezes round totals, and generates supplier orders
       unitPrice: '0.26',
     },
     {
+      requestItemId: 12,
+      source: 'APPROVED',
       catalogItemId: 112,
       supplierId: 8,
       lineTotal: '10.10',

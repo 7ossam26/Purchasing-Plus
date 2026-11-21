@@ -81,6 +81,7 @@ export const requestQuantitiesInput = requestVersion.extend({
     .max(250),
 });
 export const copyRequestInput = requestVersion.extend({
+  roundNo: id.optional(),
   siteId: id.optional(),
   itemIds: z.array(id).min(1).max(250).optional(),
 });

@@ -94,6 +94,7 @@ export const eventPayloadSchemas = {
           lineNo: id,
           quantity,
           outstanding: amount,
+          note: z.string().optional(),
         }),
       )
       .min(1),

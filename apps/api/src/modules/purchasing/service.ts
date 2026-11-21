@@ -168,6 +168,15 @@ export async function markSent(
   return batchResult(ctx, requestId, batchId, request!.version);
 }
 
+export async function assertActivePricingSupplier(ctx: Context, id: number) {
+  if (!(await repo.activeSuppliers(ctx.tx, { ids: [id] })).length)
+    throw new AppError(
+      422,
+      'INVALID_PRICING_SUPPLIER',
+      ar.purchasing.activeSupplier,
+    );
+}
+
 export function priceItem(
   ctx: Context,
   requestId: number,
@@ -181,16 +190,8 @@ export function priceItem(
       pricingDraftAction(state, itemId, input.supplierId !== null),
     read,
     async (_state, input) => {
-      if (
-        input.supplierId !== null &&
-        !(await repo.activeSuppliers(ctx.tx, { ids: [input.supplierId] }))
-          .length
-      )
-        throw new AppError(
-          422,
-          'INVALID_PRICING_SUPPLIER',
-          ar.purchasing.activeSupplier,
-        );
+      if (input.supplierId !== null)
+        await assertActivePricingSupplier(ctx, input.supplierId);
       return { command: { ...input, itemId } };
     },
   );

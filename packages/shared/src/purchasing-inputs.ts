@@ -12,8 +12,25 @@ export const createRfqInput = requestVersion.extend({
   message,
 });
 export const editRfqMessageInput = requestVersion.extend({ message });
+export const repriceRemainingInput = requestVersion.extend({
+  supplierId: id,
+  lineTotal: quantity,
+});
+export const receiptInput = requestVersion.extend({
+  note: z.string().trim().max(4000).optional(),
+  lines: z
+    .array(
+      z.strictObject({
+        itemId: id,
+        quantity,
+        note: z.string().trim().max(4000).optional(),
+      }),
+    )
+    .min(1)
+    .max(250),
+});
 export const priceRequestItemInput = z.union([
-  requestVersion.extend({ supplierId: id, lineTotal: quantity }),
+  repriceRemainingInput,
   requestVersion.extend({ supplierId: z.null(), lineTotal: z.null() }),
 ]);
 export const itemAvailabilityInput = requestVersion.extend({

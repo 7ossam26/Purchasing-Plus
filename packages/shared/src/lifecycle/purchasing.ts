@@ -271,9 +271,15 @@ function decide(ctx: Context, no: number, status: 'APPROVED' | 'REJECTED') {
   Object.assign(r, { status, decidedAt: ctx.now, decidedById: ctx.actorId });
   return r.lines;
 }
-function recordPrice(ctx: Context, line: RoundLine) {
+function recordPrice(
+  ctx: Context,
+  line: RoundLine,
+  source: 'APPROVED' | 'REPRICED',
+) {
   if (line.catalogItemId !== null)
     ctx.result.priceRecords.push({
+      requestItemId: line.itemId,
+      source,
       catalogItemId: line.catalogItemId,
       supplierId: line.supplierId,
       quantity: line.quantity,
@@ -301,7 +307,7 @@ export const approvePricing = action(
   },
   (ctx, i) => {
     const lines = decide(ctx, i.roundNo, 'APPROVED');
-    lines.forEach((l) => recordPrice(ctx, l));
+    lines.forEach((l) => recordPrice(ctx, l, 'APPROVED'));
     createOrders(ctx.state, lines);
     ctx.emit(
       'PRICING_APPROVED',
@@ -330,21 +336,37 @@ export const rejectPricing = action(
       !ctx.state.rounds.some((r) => r.status === 'APPROVED')
     )
       finish(ctx, 'REJECTED');
-    else finish(ctx);
+  },
+);
+const pendingOrderRules = {
+  key: 'purchasing.sendSupplyOrder',
+  statuses: fulfilment,
+  ready: (s: RequestState) =>
+    s.supplyOrders.some((o) => !o.sent) ? undefined : 'NO_PENDING_SEND',
+} as const;
+export function wasSupplyOrderSent(state: RequestState, number: number) {
+  return state.supplyOrders.some(
+    (order) => order.number === number && order.sent,
+  );
+}
+function pendingOrder(state: RequestState, number: number) {
+  return (
+    state.supplyOrders.find((o) => o.number === number && !o.sent) ??
+    refuse('NO_PENDING_SEND')
+  );
+}
+export const editSupplyOrderMessage = action(
+  command({ orderNo: id, message: z.string().trim().min(1) }),
+  pendingOrderRules,
+  (ctx, i) => {
+    pendingOrder(ctx.state, i.orderNo);
   },
 );
 export const markSupplyOrderSent = action(
   command({ orderNo: id }),
-  {
-    key: 'purchasing.sendSupplyOrder',
-    statuses: fulfilment,
-    ready: (s) =>
-      s.supplyOrders.some((o) => !o.sent) ? undefined : 'NO_PENDING_SEND',
-  },
+  pendingOrderRules,
   (ctx, i) => {
-    const order =
-      ctx.state.supplyOrders.find((o) => o.number === i.orderNo && !o.sent) ??
-      refuse('NO_PENDING_SEND');
+    const order = pendingOrder(ctx.state, i.orderNo);
     order.sent = true;
     ctx.emit(
       'SUPPLY_ORDER_SENT_MARKED',
@@ -359,7 +381,7 @@ export const markSupplyOrderSent = action(
 );
 export const recordReceipt = action(
   command({
-    lines: z.array(z.strictObject({ itemId: id, quantity })).min(1),
+    lines: z.array(z.strictObject({ itemId: id, quantity, note })).min(1),
     note,
   }),
   {
@@ -384,6 +406,7 @@ export const recordReceipt = action(
         lineNo: item.lineNo,
         quantity: l.quantity,
         outstanding: left,
+        ...(l.note === undefined ? {} : { note: l.note }),
       };
     });
     ctx.emit(
@@ -391,7 +414,6 @@ export const recordReceipt = action(
       { lines, note: i.note ?? null },
       lines.map((l) => l.itemId),
     );
-    finish(ctx);
   },
 );
 export const stillComing = action(
@@ -415,7 +437,7 @@ export const repriceRemaining = action(
     item.lineTotal = i.lineTotal;
     item.state = 'AWAITING_RECEIPT';
     const line = priceLine(item);
-    recordPrice(ctx, line);
+    recordPrice(ctx, line, 'REPRICED');
     if (previousSupplierId !== i.supplierId) createOrders(ctx.state, [line]);
     ctx.emit('ITEM_REPRICED', { ...line, previousSupplierId }, [item.id]);
   },
@@ -435,6 +457,6 @@ export const resolveExternally = action(
       { lineNo: item.lineNo, note: i.note ?? null },
       [item.id],
     );
-    finish(ctx);
+    if (ctx.state.status === 'AT_PURCHASING') finish(ctx);
   },
 );

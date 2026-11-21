@@ -848,12 +848,13 @@ it('submits normalized rounds, leaves unavailable lines, and notifies only scope
     (await send('get', '/?queue=purchasing', undefined, outsider).expect(200))
       .body.items,
   ).toEqual([]);
-  await db.request.update({
-    where: { id: r.id },
+  await db.supplyOrder.create({
     data: {
-      supplyOrders: [
-        { number: 1, supplierId: firstSupplier, lines: [], sent: false },
-      ],
+      requestId: r.id,
+      number: 1,
+      supplierId: firstSupplier,
+      createdAt: now,
+      message: 'توريد',
     },
   });
   expect(
@@ -866,7 +867,7 @@ it('submits normalized rounds, leaves unavailable lines, and notifies only scope
       ).expect(200)
     ).body.items.some((item: Record) => item.id === r.id),
   ).toBe(true);
-  await db.request.update({ where: { id: r.id }, data: { supplyOrders: [] } });
+  await db.supplyOrder.deleteMany({ where: { requestId: r.id } });
 });
 
 it('redacts draft prices, fee, supplier names, phones and RFQ messages by permission', async () => {

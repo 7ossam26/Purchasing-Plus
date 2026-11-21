@@ -52,6 +52,8 @@ export interface Transition {
   events: EventDraft[];
   notify: NotifyIntent[];
   priceRecords: {
+    requestItemId: number;
+    source: 'APPROVED' | 'REPRICED';
     catalogItemId: number;
     supplierId: number;
     quantity: string;
@@ -263,6 +265,7 @@ export function action<S extends z.ZodType<{ version: number }>>(
       },
     };
     change(ctx, parsed.data, viewer);
+    if (next.status === 'FULFILMENT') finish(ctx);
     if (state.status === 'PAUSED' && next.status !== 'PAUSED') {
       next.pausedAt = null;
       next.pausedById = null;

@@ -7,6 +7,7 @@ import { Router } from 'express';
 import type { z } from 'zod';
 
 import { endpoint, type Context } from '../access/endpoint.js';
+import { fulfilment } from '../fulfilment/routes.js';
 import { purchasing } from '../purchasing/routes.js';
 import { editPaused } from '../purchasing/service.js';
 
@@ -21,6 +22,7 @@ const read = (
 ) => endpoint(keys, handler);
 requests.get('/options', ...read(['requests.view'], service.options));
 requests.use('/:id/purchasing', purchasing);
+requests.use('/:id', fulfilment);
 const write = (
   key: PermissionKey,
   handler: (ctx: Context) => Promise<unknown>,

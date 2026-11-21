@@ -35,6 +35,7 @@ import {
 import { AppError } from '../../middleware/errors.js';
 import type { Context } from '../access/endpoint.js';
 import { addItem, itemsByIds } from '../catalog/service.js';
+import { persistFulfilment } from '../fulfilment/repo.js';
 import { persistRounds } from '../purchasing/repo.js';
 
 import {
@@ -164,7 +165,7 @@ export async function runTransition<
   replay?: (state: RequestState, input: I) => boolean,
 ) {
   const { tx, viewer, now } = ctx;
-  const row = await repo.loadRequestInScope(tx, requestId, viewer, true);
+  const row = await repo.loadRequestInScope(tx, requestId, viewer, 'write');
   const previous = repo.toState(row);
   const input = read();
   // Only an already recorded, non-mutating result can bypass the version check.
@@ -185,6 +186,7 @@ export async function runTransition<
     const result = action.apply(state, viewer, command, now);
     await repo.updateRequest(tx, row, previous, result.next, now);
     await persistRounds(tx, previous, result.next, viewer.userId, now);
+    await persistFulfilment(tx, row, result, now);
     await persist?.();
     if (result.copiedDraft)
       await repo.insertRequest(tx, result.copiedDraft, now);
@@ -286,7 +288,7 @@ export function copy(
 ) {
   return runTransition(ctx, id, 'copyRequest', read, async (state, input) => {
     await activeSite(ctx, input.siteId ?? state.siteId);
-    const selected = copyableItems(state, input.itemIds);
+    const selected = copyableItems(state, input.itemIds, input.roundNo);
     const [newId] = await repo.reserveIds(ctx.tx, 'Request', 1);
     return {
       command: {

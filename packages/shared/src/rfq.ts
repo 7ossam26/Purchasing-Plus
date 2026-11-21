@@ -4,6 +4,7 @@ import { renderTemplate } from './settings.js';
 type RfqRequest = {
   requestNumber: string;
   siteName: string;
+  siteAddress?: string;
   categoryName: string;
 };
 type RfqItem = {
@@ -14,7 +15,7 @@ type RfqItem = {
   unit: string;
 };
 
-export function buildRfqMessage(
+export function buildSupplierMessage(
   template: string,
   request: RfqRequest,
   items: readonly RfqItem[],
@@ -27,6 +28,8 @@ export function buildRfqMessage(
   );
   return [intro, ...lines].filter(Boolean).join('\n');
 }
+
+export const buildRfqMessage = buildSupplierMessage;
 
 export function buildWhatsAppUrl(digits: string, text: string) {
   const normalized = normalizeEgyptianMobile(digits);

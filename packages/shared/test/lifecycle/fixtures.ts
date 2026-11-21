@@ -199,6 +199,12 @@ export const cases = {
     input: { ...base, orderNo: 1 },
     item: 'AWAITING_RECEIPT',
   },
+  editSupplyOrderMessage: {
+    key: 'purchasing.sendSupplyOrder',
+    statuses: ['FULFILMENT'],
+    input: { ...base, orderNo: 1, message: 'تعديل' },
+    item: 'AWAITING_RECEIPT',
+  },
   recordReceipt: {
     key: 'receipt.record',
     statuses: ['FULFILMENT'],
@@ -275,7 +281,7 @@ export function sample(name: ActionName) {
       decidedAt: null,
       lines: [roundLine],
     });
-  if (name === 'markSupplyOrderSent')
+  if (name === 'markSupplyOrderSent' || name === 'editSupplyOrderMessage')
     s.supplyOrders.push({
       number: 1,
       supplierId: 8,

@@ -4,11 +4,18 @@ import {
   eventPayloadSchemas,
   inSite,
   isFinal,
+  outstanding,
   stateCounts,
   unitPrice,
 } from '@purchasing-plus/shared/lifecycle';
 
 import { allowed, type Viewer } from '../../middleware/access.js';
+import {
+  resolutions,
+  roundSummaries,
+  toOrdersDto,
+  toReceiptsDto,
+} from '../fulfilment/dto.js';
 
 import { toState, type RequestRecord } from './repo.js';
 
@@ -20,9 +27,13 @@ export function toRequestDto(row: RequestRecord, viewer: Viewer) {
   const supplierNames = suppliers
     ? new Map(row.items.map((item) => [item.id, item.supplier?.name ?? null]))
     : null;
+  const resolvedBy = resolutions(row);
   const returned =
     row.status === 'RETURNED' && row.createdById === viewer.userId
-      ? eventPayloadSchemas.RETURNED_FOR_EDIT.safeParse(row.events[0]?.payload)
+      ? eventPayloadSchemas.RETURNED_FOR_EDIT.safeParse(
+          row.events.find((event) => event.type === 'RETURNED_FOR_EDIT')
+            ?.payload,
+        )
       : null;
   return {
     id: state.id,
@@ -47,10 +58,17 @@ export function toRequestDto(row: RequestRecord, viewer: Viewer) {
     ...(row.copiedFrom && inSite(viewer, row.copiedFrom.siteId)
       ? { copiedFromId }
       : {}),
+    rounds: roundSummaries(row, viewer),
+    supplyOrders: toOrdersDto(row, viewer),
+    receipts: toReceiptsDto(row),
     items: items
       .filter((item) => item.state !== 'REMOVED')
       .map(({ supplierId, lineTotal, pricedQuantity, ...item }) => ({
         ...item,
+        outstanding: outstanding(item),
+        ...(resolvedBy.has(item.id)
+          ? { resolvedBy: resolvedBy.get(item.id) }
+          : {}),
         isOther: item.catalogItemId === null,
         ...(prices
           ? {

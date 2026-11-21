@@ -202,7 +202,9 @@ export function openItem(data: LineData, lineNo: number): RequestItem {
     modifiedAfterSend: false,
   };
 }
-export function outstanding(item: RequestItem) {
+export function outstanding(
+  item: Pick<RequestItem, 'quantity' | 'receivedQty'>,
+) {
   return new Decimal(item.quantity).minus(item.receivedQty).toFixed(2);
 }
 export function sameDecimal(a: string | null, b: string | null) {
@@ -210,6 +212,15 @@ export function sameDecimal(a: string | null, b: string | null) {
 }
 export function unitPrice(lineTotal: string, units: string) {
   return new Decimal(lineTotal).div(units).toFixed(2, Decimal.ROUND_HALF_UP);
+}
+export function priceChange(current: string, previous: string) {
+  const difference = new Decimal(current).minus(previous);
+  return {
+    amount: difference.toFixed(2),
+    percent: new Decimal(previous).isZero()
+      ? null
+      : difference.times(100).div(previous).toFixed(2, Decimal.ROUND_HALF_UP),
+  };
 }
 const closedStates = new Set<ItemState>([
   'RECEIVED',

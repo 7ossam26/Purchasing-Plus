@@ -41,7 +41,7 @@ async function validateCategories(tx: Tx, ids: number[]) {
     throw new AppError(422, 'INVALID_CATEGORIES', 'اختر فئات رئيسية موجودة');
 }
 
-async function validatePhone(tx: Tx, phone: string, id?: number) {
+export async function validatePhone(tx: Tx, phone: string, id?: number) {
   const result = normalizeEgyptianMobile(phone);
   if (!result.ok)
     throw new AppError(
@@ -81,8 +81,9 @@ export async function getSupplier(tx: Tx, id: number) {
 export async function addSupplier(
   ctx: Context,
   { whatsappNumber, categoryIds, ...input }: z.infer<typeof createSupplier>,
+  deactivatePermission: 'suppliers.delete' | 'data.import' = 'suppliers.delete',
 ) {
-  if (input.isActive === false && !allowed(ctx.viewer, 'suppliers.delete'))
+  if (input.isActive === false && !allowed(ctx.viewer, deactivatePermission))
     throw forbidden();
   await validateCategories(ctx.tx, categoryIds);
   const phone = await validatePhone(ctx.tx, whatsappNumber);
@@ -101,8 +102,9 @@ export async function editSupplier(
   ctx: Context,
   id: number,
   { whatsappNumber, categoryIds, ...input }: z.infer<typeof editSupplierSchema>,
+  deactivatePermission: 'suppliers.delete' | 'data.import' = 'suppliers.delete',
 ) {
-  if (input.isActive === false && !allowed(ctx.viewer, 'suppliers.delete'))
+  if (input.isActive === false && !allowed(ctx.viewer, deactivatePermission))
     throw forbidden();
   const before = await getSupplier(ctx.tx, id);
   if (categoryIds) await validateCategories(ctx.tx, categoryIds);

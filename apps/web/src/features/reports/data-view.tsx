@@ -13,7 +13,7 @@ import { Link } from 'react-router';
 import { Button } from '../../components/ui/button.js';
 import { StatusChip } from '../../components/ui/chip.js';
 import { EmptyState, Skeleton } from '../../components/ui/states.js';
-import { ApiError } from '../../lib/api/client.js';
+import { ApiError, saveDownload } from '../../lib/api/client.js';
 import { reportsApi, type Filters } from '../../lib/api/reports.js';
 
 export function ReportLoading() {
@@ -140,16 +140,7 @@ export function ExportButton({
 }) {
   const exportFile = useMutation({
     mutationFn: () => reportsApi.export(area, id, filters),
-    onSuccess: (file) => {
-      const url = URL.createObjectURL(file);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = id + '.xlsx';
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1_000);
-    },
+    onSuccess: (file) => saveDownload(file, id + '.xlsx'),
   });
   return (
     <div className="grid gap-1">

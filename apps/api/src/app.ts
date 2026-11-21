@@ -18,6 +18,7 @@ import { attributes } from './modules/attributes/routes.js';
 import { catalog } from './modules/catalog/routes.js';
 import { catalogImages } from './modules/catalog-images/routes.js';
 import { catalogTree } from './modules/catalog-tree/routes.js';
+import { data } from './modules/data/routes.js';
 import {
   MemoryEventBus,
   StreamTickets,
@@ -84,6 +85,7 @@ export function createApp({
     app.get(mediaPath + '/*key', storage.serve);
   app.use(express.json());
   app.use('/api/v1', accessRoutes(), events, inbox, reports);
+  app.use('/api/v1/data', data);
   app.use('/api/v1/settings', settings);
   app.use('/api/v1', attributes);
   app.use('/api/v1/catalog', catalogImages, catalog);

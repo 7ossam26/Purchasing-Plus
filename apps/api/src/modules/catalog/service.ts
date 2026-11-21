@@ -201,7 +201,11 @@ export async function search(
 }
 
 async function validateUnit(tx: Tx, id: number) {
-  if (!(await activeUnit(tx, id)))
+  assertAvailableUnit(await activeUnit(tx, id));
+}
+
+export function assertAvailableUnit(unit: { isActive: boolean } | null) {
+  if (!unit?.isActive)
     throw new AppError(422, 'INVALID_UNIT', 'اختر وحدة موجودة ونشطة');
 }
 
@@ -224,47 +228,55 @@ async function validateValues(
     ]),
   );
   return values.map(({ attributeId, value }): repo.ItemValue => {
-    const definition = byId.get(attributeId);
-    const unchanged = existing.get(attributeId) === value;
-    if (!definition || (!definition.isActive && !unchanged))
-      throw new AppError(422, 'INVALID_ATTRIBUTE', 'اختر خاصية موجودة ونشطة');
-    if (definition.type === 'SELECT') {
-      const option = definition.options.find(
-        (candidate) => candidate.id === value,
-      );
-      if (!option || (!option.isActive && !unchanged))
-        throw new AppError(
-          422,
-          'INVALID_OPTION',
-          'اختر خيارًا نشطًا من خيارات الخاصية',
-        );
-      return { attributeId, optionId: option.id };
-    }
-    if (definition.type === 'NUMBER') {
-      const number = catalogAttributeNumber.safeParse(value);
-      if (!number.success)
-        throw new AppError(
-          422,
-          'INVALID_ATTRIBUTE_NUMBER',
-          'اكتب قيمة رقمية للخاصية',
-        );
-      return { attributeId, numberValue: number.data };
-    }
-    if (typeof value !== 'string')
+    return validateItemValue(
+      byId.get(attributeId),
+      { attributeId, value },
+      existing.get(attributeId),
+    );
+  });
+}
+
+export function validateItemValue(
+  definition: Awaited<ReturnType<typeof findAttributes>>[number] | undefined,
+  { attributeId, value }: NewItem['attributeValues'][number],
+  previous?: string | number,
+): repo.ItemValue {
+  const unchanged = previous === value;
+  if (!definition || (!definition.isActive && !unchanged))
+    throw new AppError(422, 'INVALID_ATTRIBUTE', 'اختر خاصية موجودة ونشطة');
+  if (definition.type === 'SELECT') {
+    const option = definition.options.find(
+      (candidate) => candidate.id === value,
+    );
+    if (!option || (!option.isActive && !unchanged))
       throw new AppError(
         422,
-        'INVALID_ATTRIBUTE_TEXT',
-        'اكتب قيمة نصية للخاصية',
+        'INVALID_OPTION',
+        'اختر خيارًا نشطًا من خيارات الخاصية',
       );
-    return { attributeId, textValue: value };
-  });
+    return { attributeId, optionId: option.id };
+  }
+  if (definition.type === 'NUMBER') {
+    const number = catalogAttributeNumber.safeParse(value);
+    if (!number.success)
+      throw new AppError(
+        422,
+        'INVALID_ATTRIBUTE_NUMBER',
+        'اكتب قيمة رقمية للخاصية',
+      );
+    return { attributeId, numberValue: number.data };
+  }
+  if (typeof value !== 'string')
+    throw new AppError(422, 'INVALID_ATTRIBUTE_TEXT', 'اكتب قيمة نصية للخاصية');
+  return { attributeId, textValue: value };
 }
 
 export async function addItem(
   ctx: Context,
   { attributeValues, ...input }: NewItem,
+  deactivatePermission: 'catalog.delete' | 'data.import' = 'catalog.delete',
 ) {
-  if (input.isActive === false && !allowed(ctx.viewer, 'catalog.delete'))
+  if (input.isActive === false && !allowed(ctx.viewer, deactivatePermission))
     throw forbidden();
   const node = await activeNode(ctx.tx, input.nodeId);
   const categoryId = pathIds(node.path)[0]!;
@@ -300,8 +312,9 @@ export async function editItem(
   ctx: Context,
   id: number,
   { attributeValues, ...input }: ItemEdit,
+  deactivatePermission: 'catalog.delete' | 'data.import' = 'catalog.delete',
 ) {
-  if (input.isActive === false && !allowed(ctx.viewer, 'catalog.delete'))
+  if (input.isActive === false && !allowed(ctx.viewer, deactivatePermission))
     throw forbidden();
   const before = await repo.findItem(ctx.tx, id);
   if (input.nodeId !== undefined && input.nodeId !== before.nodeId)
@@ -332,7 +345,11 @@ export async function moveItem(ctx: Context, id: number, nodeId: number) {
 
 async function validateMove(tx: Tx, sourcePath: string, nodeId: number) {
   const target = await activeNode(tx, nodeId);
-  if (pathIds(sourcePath)[0] !== pathIds(target.path)[0])
+  assertSameCategory(sourcePath, target.path);
+}
+
+export function assertSameCategory(sourcePath: string, targetPath: string) {
+  if (pathIds(sourcePath)[0] !== pathIds(targetPath)[0])
     throw new AppError(
       409,
       'CROSS_CATEGORY_MOVE',

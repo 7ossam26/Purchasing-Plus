@@ -45,6 +45,9 @@ const modulePages: Partial<Record<string, RouteObject['lazy']>> = {
   settings: async () => ({
     Component: (await import('../pages/admin/settings.js')).SettingsPage,
   }),
+  data: async () => ({
+    Component: (await import('../pages/admin/data.js')).DataPage,
+  }),
   sites: async () => ({
     Component: (await import('../pages/admin/sites.js')).SitesPage,
   }),

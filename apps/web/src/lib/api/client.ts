@@ -23,14 +23,16 @@ async function apiResponse(
 ): Promise<Response> {
   const headers = new Headers(options.headers);
   headers.set('Accept', accept);
-  if (body !== undefined) headers.set('Content-Type', 'application/json');
+  const multipart = body instanceof FormData;
+  if (body !== undefined && !multipart)
+    headers.set('Content-Type', 'application/json');
   let response: Response;
   try {
     response = await fetch('/api/v1' + path, {
       ...options,
       headers,
       credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: multipart ? body : JSON.stringify(body),
     });
   } catch (error) {
     if (options.signal?.aborted) throw error;
@@ -65,4 +67,15 @@ export async function api<T>(
 
 export async function download(path: string, accept: string) {
   return (await apiResponse(path, undefined, accept)).blob();
+}
+
+export function saveDownload(file: Blob, filename: string) {
+  const url = URL.createObjectURL(file);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }

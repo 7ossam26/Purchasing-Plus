@@ -72,7 +72,7 @@ export async function hydrateLines(
   );
   const units = await findLineUnits(
     tx,
-    other.map((line) => line.unitId),
+    lines.flatMap((line) => (line.unitId === undefined ? [] : [line.unitId])),
   );
   const paths = await breadcrumbs(
     tx,
@@ -101,15 +101,23 @@ export async function hydrateLines(
       const entry = catalog.get(line.catalogItemId);
       if (!entry?.active || entry.categoryId !== categoryId)
         throw invalidLine();
+      const unit =
+        line.unitId === undefined
+          ? undefined
+          : units.find((unit) => unit.id === line.unitId);
+      if (line.unitId !== undefined && !unit?.isActive) throw invalidLine();
       return {
         id,
         catalogItemId: line.catalogItemId,
-        unitId: entry.unitId,
+        unitId: unit?.id ?? entry.unitId,
         nodeId: entry.nodeId,
         otherName: null,
         specs,
         quantity,
-        snapshot: entry.snapshot,
+        snapshot: {
+          ...entry.snapshot,
+          unitName: unit?.name ?? entry.snapshot.unitName,
+        },
       };
     }
     const node = nodes.find((node) => node.id === line.nodeId);
@@ -160,6 +168,7 @@ export async function snapshotForSubmit(tx: Tx, state: RequestState) {
             quantity: item.quantity,
             specs: item.specs,
             catalogItemId: item.catalogItemId,
+            unitId: item.unitId,
           },
     ),
     state.items,

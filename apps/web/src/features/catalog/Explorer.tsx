@@ -46,6 +46,7 @@ export type ExplorerProps =
       nodeHref: (nodeId: number) => string;
       onPickItem: (item: CatalogItem) => void;
       onAddOther: (nodeId: number) => void;
+      beforeContents?: ReactNode;
     };
 
 interface FolderLinkState {
@@ -192,6 +193,7 @@ export function Explorer(props: ExplorerProps) {
           <StatusFilter value={filter} onChange={setFilter} />
         )}
       </header>
+      {props.mode === 'pick' && props.beforeContents}
       <div className="catalog-folder-frame grid gap-4">
         {nodeId === undefined ? (
           <>

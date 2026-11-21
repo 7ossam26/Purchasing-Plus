@@ -18,7 +18,8 @@ import { visiblePath } from '../catalog-tree/repo.js';
 
 const include = {
   items: {
-    omit: { requestId: true, pickedAt: true },
+    omit: { requestId: true, pickedAt: true, supplierId: true },
+    include: { supplier: { select: { id: true, name: true } } },
     orderBy: { lineNo: 'asc' },
   },
   site: { select: { id: true, name: true } },
@@ -26,6 +27,12 @@ const include = {
   creator: { select: { id: true, name: true } },
   approver: { select: { id: true, name: true } },
   copiedFrom: { select: { siteId: true } },
+  events: {
+    where: { type: 'RETURNED_FOR_EDIT' },
+    orderBy: { id: 'desc' },
+    take: 1,
+    select: { payload: true },
+  },
 } satisfies Prisma.RequestInclude;
 export type RequestRecord = Prisma.RequestGetPayload<{
   include: typeof include;
@@ -106,9 +113,11 @@ export function toState(row: RequestRecord): RequestState {
         receivedQty,
         lineTotal,
         pricedQuantity,
+        supplier,
         ...item
       }) => ({
         ...item,
+        supplierId: supplier?.id ?? null,
         snapshot: snapshot.parse(json),
         quantity: quantity.toFixed(2),
         receivedQty: receivedQty.toFixed(2),
@@ -127,6 +136,30 @@ export function findCategory(tx: Tx, id: number) {
     where: { id, parentId: null, isActive: true },
     select: { id: true },
   });
+}
+export async function requestOptions(
+  tx: Tx,
+  viewer: Viewer,
+  withUnits: boolean,
+) {
+  const sites = await tx.site.findMany({
+    where: { id: siteWhere(viewer).siteId },
+    select: { id: true, name: true, isActive: true },
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+  });
+  const categories = await tx.catalogNode.findMany({
+    where: { parentId: null },
+    select: { id: true, name: true, isActive: true, iconKey: true },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+  });
+  const units = withUnits
+    ? await tx.unit.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, isActive: true },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      })
+    : [];
+  return { sites, categories, units };
 }
 export function findLineNodes(tx: Tx, ids: number[]) {
   return tx.catalogNode.findMany({

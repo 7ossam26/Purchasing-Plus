@@ -16,12 +16,14 @@ export interface BarAction {
 function Action({
   action,
   variant,
+  fullWidth,
 }: {
   action: BarAction;
   variant: ButtonVariant;
+  fullWidth?: boolean;
 }) {
   return (
-    <div className="grid gap-1">
+    <div className={`grid gap-1 ${fullWidth ? 'w-full sm:w-auto' : ''}`}>
       <Button
         variant={action.variant ?? variant}
         loading={action.loading}
@@ -40,16 +42,28 @@ export function ActionBar({
   primary,
   secondary = [],
   overflow = [],
+  stickyOnDesktop = false,
+  fullWidthPrimary = false,
 }: {
   primary?: BarAction;
   secondary?: readonly BarAction[];
   overflow?: readonly BarAction[];
+  stickyOnDesktop?: boolean;
+  fullWidthPrimary?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   if (!primary && !secondary.length && !overflow.length) return null;
   return (
-    <div className="sticky bottom-0 z-20 flex flex-wrap items-start gap-2 border-y border-seam bg-paper p-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:static sm:rounded-panel sm:border">
-      {primary && <Action action={primary} variant="primary" />}
+    <div
+      className={`sticky bottom-0 z-20 flex flex-wrap items-start gap-2 border-y border-seam bg-paper p-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:rounded-panel sm:border ${stickyOnDesktop ? '' : 'sm:static'}`}
+    >
+      {primary && (
+        <Action
+          action={primary}
+          variant="primary"
+          fullWidth={fullWidthPrimary}
+        />
+      )}
       {secondary.map((action) => (
         <Action key={action.id} action={action} variant="secondary" />
       ))}

@@ -71,10 +71,12 @@ export function Carousel({
   images,
   name,
   large = false,
+  compact = false,
 }: {
   images: CatalogImage[];
   name: string;
   large?: boolean;
+  compact?: boolean;
 }) {
   const [active, setActive] = useState(0);
   const [viewer, setViewer] = useState<number | null>(null);
@@ -145,7 +147,7 @@ export function Carousel({
               aria-label={copy.open + ' ' + formatNumber(i + 1)}
               tabIndex={i === index ? 0 : -1}
               onClick={() => setViewer(i)}
-              className={`grid w-full place-items-center focus-visible:-outline-offset-3 ${large ? 'h-[min(62dvh,56rem)]' : 'aspect-square'}`}
+              className={`grid w-full place-items-center focus-visible:-outline-offset-3 ${compact ? 'h-32 sm:h-48' : large ? 'h-[min(62dvh,56rem)]' : 'aspect-square'}`}
             >
               <img
                 src={image.displayUrl}

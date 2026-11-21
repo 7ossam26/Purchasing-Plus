@@ -51,7 +51,13 @@ type EditorProps = {
   item?: CatalogItem;
   nodeId: number;
   onClose: () => void;
-  onSaved: (item: CatalogItem) => void;
+  onSaved?: (item: CatalogItem) => void;
+  conversion?: {
+    name: string;
+    unitId: number;
+    categoryId: number;
+    save: (body: ReturnType<typeof createCatalogItem.parse>) => Promise<void>;
+  };
 };
 
 export function ItemEditor(props: EditorProps) {
@@ -124,6 +130,7 @@ function ItemForm({
   onBusy,
   onClose,
   onSaved,
+  conversion,
 }: EditorProps & {
   choices: Choices;
   initialPath: NamedRecord[];
@@ -135,7 +142,7 @@ function ItemForm({
   const [path, setPath] = useState(initialPath);
   const [pick, setPick] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [saved, setSaved] = useState<CatalogItem>();
+  const [saved, setSaved] = useState<CatalogItem | null>();
   const [selectId, setSelectId] = useState('');
   const [values, setValues] = useState(() => initialValues(item, choices));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -143,10 +150,15 @@ function ItemForm({
   const client = useQueryClient();
   useLeaveGuard(dirty);
   useEffect(() => {
-    if (saved) onSaved(saved);
-  }, [onSaved, saved]);
+    if (saved) onSaved?.(saved);
+    else if (saved === null) onClose();
+  }, [onClose, onSaved, saved]);
   const change = useMutation({
-    mutationFn: (body: ReturnType<typeof createCatalogItem.parse>) => {
+    mutationFn: async (body: ReturnType<typeof createCatalogItem.parse>) => {
+      if (conversion) {
+        await conversion.save(body);
+        return null;
+      }
       if (!item) return catalogApi.create(body);
       const status = active === item.isActive ? {} : { isActive: active };
       return catalogApi.saveEditor(
@@ -159,16 +171,17 @@ function ItemForm({
       );
     },
     onSuccess: (record) => {
-      client.setQueryData<CatalogItem>(
-        ['master-data', 'item', record.id],
-        (previous) => ({
-          ...previous,
-          ...record,
-        }),
-      );
+      if (record)
+        client.setQueryData<CatalogItem>(
+          ['master-data', 'item', record.id],
+          (previous) => ({
+            ...previous,
+            ...record,
+          }),
+        );
       setDirty(false);
       setSaved(record);
-      toast.success(copy.saved);
+      if (record) toast.success(copy.saved);
       void client.invalidateQueries({ queryKey: ['master-data'] });
     },
   });
@@ -213,7 +226,13 @@ function ItemForm({
 
   async function save(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (imageBusy || change.isPending || relocate.isPending || saved) return;
+    if (
+      imageBusy ||
+      change.isPending ||
+      relocate.isPending ||
+      saved !== undefined
+    )
+      return;
     const form = new FormData(event.currentTarget);
     const invalid: Record<string, string> = {};
     const name = String(form.get('name') ?? '').trim();
@@ -287,7 +306,7 @@ function ItemForm({
               <Input
                 {...props}
                 name="name"
-                defaultValue={item?.name}
+                defaultValue={item?.name ?? conversion?.name}
                 maxLength={200}
                 data-initial-focus
               />
@@ -305,7 +324,11 @@ function ItemForm({
           </Field>
           <Field label={copy.unit} error={errors.unit} required>
             {(props) => (
-              <Select {...props} name="unit" defaultValue={item?.unitId ?? ''}>
+              <Select
+                {...props}
+                name="unit"
+                defaultValue={item?.unitId ?? conversion?.unitId ?? ''}
+              >
                 <option value="">{copy.chooseUnit}</option>
                 {units.map(({ id, name }) => (
                   <option key={id} value={id}>
@@ -471,7 +494,7 @@ function ItemForm({
             </div>
           )}
         </section>
-        {canDeactivate || item?.isActive === false ? (
+        {!conversion && (canDeactivate || item?.isActive === false) ? (
           <ToggleRow
             label={admin.active}
             checked={active}
@@ -480,7 +503,7 @@ function ItemForm({
               setDirty(true);
             }}
           />
-        ) : (
+        ) : conversion ? null : (
           item && <p className="text-small text-concrete">{admin.active}</p>
         )}
         {item ? (
@@ -516,7 +539,11 @@ function ItemForm({
       {pick && (
         <NodePicker
           title={copy.chooseLocation}
-          scope={item ? { categoryId: item.nodePath[0]!.id } : undefined}
+          scope={
+            item
+              ? { categoryId: item.nodePath[0]!.id }
+              : conversion && { categoryId: conversion.categoryId }
+          }
           onClose={() => setPick(false)}
           onPick={choosePath}
         />

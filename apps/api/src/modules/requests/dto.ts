@@ -1,6 +1,7 @@
 import { ar } from '@purchasing-plus/shared';
 import {
   availableActions,
+  eventPayloadSchemas,
   inSite,
   isFinal,
   stateCounts,
@@ -15,6 +16,13 @@ export function toRequestDto(row: RequestRecord, viewer: Viewer) {
   const { deliveryFee, items, copiedFromId } = state;
   const prices = allowed(viewer, 'requests.viewPrices');
   const suppliers = allowed(viewer, 'requests.viewSupplierNames');
+  const supplierNames = suppliers
+    ? new Map(row.items.map((item) => [item.id, item.supplier?.name ?? null]))
+    : null;
+  const returned =
+    row.status === 'RETURNED' && row.createdById === viewer.userId
+      ? eventPayloadSchemas.RETURNED_FOR_EDIT.safeParse(row.events[0]?.payload)
+      : null;
   return {
     id: state.id,
     number: state.number,
@@ -32,6 +40,7 @@ export function toRequestDto(row: RequestRecord, viewer: Viewer) {
     pausedAt: state.pausedAt,
     pauseReason: state.pauseReason,
     approvedById: state.approvedById,
+    ...(returned?.success ? { returnReason: returned.data.reason } : {}),
     ...(prices ? { deliveryFee } : {}),
     ...(row.copiedFrom && inSite(viewer, row.copiedFrom.siteId)
       ? { copiedFromId }
@@ -42,7 +51,9 @@ export function toRequestDto(row: RequestRecord, viewer: Viewer) {
         ...item,
         isOther: item.catalogItemId === null,
         ...(prices ? { lineTotal, pricedQuantity } : {}),
-        ...(suppliers ? { supplierId } : {}),
+        ...(supplierNames
+          ? { supplierId, supplierName: supplierNames.get(item.id) }
+          : {}),
       })),
     site: row.site,
     category: row.category,

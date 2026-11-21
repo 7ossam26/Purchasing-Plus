@@ -1,4 +1,5 @@
 import {
+  ClipboardList,
   Database,
   Folder,
   History,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 
 const icons = {
+  ClipboardList,
   Database,
   Folder,
   History,

@@ -2,6 +2,7 @@ import {
   ar,
   cairoDateBoundary,
   createCatalogItem,
+  emptyInput,
   type addRequestItemToCatalogInput,
   type copyRequestInput,
   type createRequestInput,
@@ -26,6 +27,7 @@ import {
 import type { z } from 'zod';
 
 import {
+  allowed,
   assertSiteInScope,
   missing,
   type Viewer,
@@ -319,6 +321,11 @@ export async function getRequest(ctx: Context, id: number) {
     await repo.loadRequestInScope(ctx.tx, id, ctx.viewer),
     ctx.viewer,
   );
+}
+
+export async function options({ tx, viewer, req }: Context) {
+  emptyInput.parse(req.query);
+  return repo.requestOptions(tx, viewer, allowed(viewer, 'requests.create'));
 }
 
 export async function list(

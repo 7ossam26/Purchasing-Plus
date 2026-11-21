@@ -17,6 +17,7 @@ const read = (
   keys: PermissionKey[],
   handler: (ctx: Context) => Promise<unknown>,
 ) => endpoint(keys, handler);
+requests.get('/options', ...read(['requests.view'], service.options));
 const write = (
   key: PermissionKey,
   handler: (ctx: Context) => Promise<unknown>,

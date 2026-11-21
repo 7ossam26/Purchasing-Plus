@@ -66,6 +66,9 @@ export function holds(viewer: Viewer, key: PermissionKey) {
 
 export const amount = z.string().regex(/^(?:0|[1-9]\d{0,11})(?:\.\d{1,2})?$/);
 export const quantity = amount.refine((value) => /[1-9]/.test(value));
+export function addQuantities(a: string, b: string) {
+  return new Decimal(a).plus(b).toFixed(2);
+}
 export const editableRequestFields = z.strictObject({
   urgency: z.enum(urgencies),
   unitOrClient: z.string().nullable(),

@@ -309,6 +309,44 @@ it('validates site, scope, category, units, line identity and quantity before au
   expect(verifyAudit(env.AUDIT_HMAC_SECRET, audit)).toBe(true);
 });
 
+it('provides scoped picker options and keeps a selected catalog-line unit through submit', async () => {
+  const alternative = await db.unit.create({ data: { name: 'علبة' } });
+  const options = (await send('get', '/options').expect(200)).body;
+  expect(options.sites.map(({ id }: { id: number }) => id)).toEqual([
+    siteId,
+    inactiveSite,
+  ]);
+  expect(options.categories).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: categoryId, iconKey: 'zap' }),
+    ]),
+  );
+  expect(options.units).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: alternative.id })]),
+  );
+  await send('get', '/options', undefined, denied).expect(403);
+  expect(
+    (await send('get', '/options', undefined, reader).expect(200)).body.units,
+  ).toEqual([]);
+  const request = await create();
+  await send('patch', path(request.id, '/draft'), {
+    version: request.version,
+    items: [{ ...catalogLine(), unitId: 99999 }],
+  }).expect(422);
+  const saved = await save(request, [
+    { ...catalogLine(), unitId: alternative.id },
+  ]);
+  expect(saved.items[0]).toMatchObject({
+    unitId: alternative.id,
+    snapshot: { unitName: 'علبة' },
+  });
+  const submitted = await submit(saved);
+  expect(submitted.items[0]).toMatchObject({
+    unitId: alternative.id,
+    snapshot: { unitName: 'علبة' },
+  });
+});
+
 it('assigns gap-free consecutive numbers across 30 concurrent submits and Cairo year rollover', async () => {
   now = new Date('2030-12-31T21:59:59Z');
   const left = await submit(await draft());

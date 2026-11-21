@@ -125,6 +125,7 @@ function catalogRoute(
 function moduleRoutes(): RouteObject[] {
   return modules.map((module) => {
     if (module.id === 'catalog') return catalogRoute(module.path, module.anyOf);
+    if (module.id === 'requests') return requestRoutes(module.path);
     const shell = module.kind === 'admin' ? <AdminShell /> : <StandardShell />;
     const page = modulePages[module.id];
     return {
@@ -163,6 +164,69 @@ function moduleRoutes(): RouteObject[] {
       ],
     };
   });
+}
+
+function requestRoutes(path: string): RouteObject {
+  return {
+    path,
+    element: <ProtectedRoute anyOf={['requests.view']} />,
+    children: [
+      {
+        element: <StandardShell />,
+        children: [
+          {
+            index: true,
+            lazy: async () => ({
+              Component: (await import('../pages/requests.js')).RequestsPage,
+            }),
+          },
+          {
+            path: ':id',
+            lazy: async () => ({
+              Component: (await import('../features/requests/workspace.js'))
+                .RequestWorkspace,
+            }),
+            children: [
+              {
+                index: true,
+                lazy: async () => ({
+                  Component: (await import('../features/requests/detail.js'))
+                    .RequestDetailPage,
+                }),
+              },
+              {
+                path: 'review',
+                lazy: async () => ({
+                  Component: (await import('../features/requests/detail.js'))
+                    .RequestReviewPage,
+                }),
+              },
+              {
+                element: <ProtectedRoute anyOf={['catalog.view']} />,
+                children: [
+                  {
+                    path: 'add/node/:nodeId',
+                    lazy: async () => ({
+                      Component: (
+                        await import('../features/requests/picker.js')
+                      ).RequestPickerPage,
+                    }),
+                  },
+                ],
+              },
+              {
+                path: 'catalog/:lineId',
+                lazy: async () => ({
+                  Component: (await import('../features/requests/detail.js'))
+                    .RequestConversionPage,
+                }),
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
 }
 const masterDataRoutes: RouteObject[] = [
   {

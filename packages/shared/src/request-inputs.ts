@@ -19,7 +19,7 @@ export const createRequestInput = header.extend({ categoryId: id });
 
 const itemFields = { id: id.optional(), specs: z.string().max(4000), quantity };
 const line = z.union([
-  z.strictObject({ ...itemFields, catalogItemId: id }),
+  z.strictObject({ ...itemFields, catalogItemId: id, unitId: id.optional() }),
   z.strictObject({
     ...itemFields,
     catalogItemId: z.null().optional(),

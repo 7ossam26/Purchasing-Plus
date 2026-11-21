@@ -5,7 +5,8 @@ import { cairoYear } from '@purchasing-plus/shared';
 import {
   deriveStage,
   matchesRecipient,
-  purchasingQueueRules,
+  queueRules,
+  type Queue,
   snapshot,
   type EventDraft,
   type NotifyIntent,
@@ -74,7 +75,8 @@ export async function loadRequestInScope(
   lock: 'read' | 'write' = 'read',
 ) {
   // Hold the request stable while Prisma loads its related lines, decisions and receipts.
-  const mode = lock === 'write' ? Prisma.sql`FOR UPDATE` : Prisma.sql`FOR SHARE`;
+  const mode =
+    lock === 'write' ? Prisma.sql`FOR UPDATE` : Prisma.sql`FOR SHARE`;
   const matches = await tx.$queryRaw<{ id: number }[]>(Prisma.sql`
     SELECT id FROM "Request" WHERE id = ${requestId} AND ${siteSql(viewer)} ${mode}
   `);
@@ -398,7 +400,7 @@ export async function appendNotifications(
   now: Date,
 ) {
   const first = intents[0];
-  if (!first) return;
+  if (!first) return [];
   const candidates = await tx.user.findMany({
     where: {
       isActive: true,
@@ -443,28 +445,35 @@ export async function appendNotifications(
         }),
       ),
   );
-  if (recipients.length)
-    await tx.notification.createMany({
-      data: recipients.map((user) => ({
-        eventId,
-        userId: user.id,
-        requestId: first.requestId,
-        createdAt: now,
-      })),
-    });
+  if (!recipients.length) return [];
+  // The replay cursor must follow commit order, including across unrelated requests.
+  await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(735220)`);
+  return tx.notification.createManyAndReturn({
+    select: { userId: true },
+    data: recipients.map((user) => ({
+      eventId,
+      userId: user.id,
+      requestId: first.requestId,
+      createdAt: now,
+    })),
+  });
 }
 
-export function purchasingQueueWhere(viewer: Viewer): Prisma.RequestWhereInput {
-  const branches = purchasingQueueRules
+export function queueWhere(
+  viewer: Viewer,
+  queue: Queue,
+): Prisma.RequestWhereInput | null {
+  const branches = queueRules[queue]
     .filter((rule) => rule.anyOf.some((key) => allowed(viewer, key)))
     .map((rule) => ({
       status: rule.status,
+      ...(rule.own ? { createdById: viewer.userId } : {}),
       ...(rule.items
         ? { items: { some: { state: { in: [...rule.items] } } } }
         : {}),
       ...(rule.unsentOrder ? { supplyOrders: { some: { sentAt: null } } } : {}),
     }));
-  return branches.length ? { OR: branches } : { id: { in: [] } };
+  return branches.length ? { OR: branches } : null;
 }
 
 export async function listRequests(
@@ -526,4 +535,22 @@ export async function recentItemIds(
     LIMIT 12
   `);
   return rows.map((row) => row.id);
+}
+
+export function timelineBatches(tx: Tx, requestId: number, viewer: Viewer) {
+  return tx.rfqBatch.findMany({
+    where: { requestId, request: siteWhere(viewer) },
+    select: {
+      id: true,
+      suppliers: {
+        orderBy: { supplierId: 'asc' },
+        select: {
+          sentAt: true,
+          ...(allowed(viewer, 'requests.viewSupplierNames')
+            ? { supplier: { select: { name: true } } }
+            : {}),
+        },
+      },
+    },
+  });
 }

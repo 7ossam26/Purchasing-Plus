@@ -1,3 +1,5 @@
+import { timelineUi } from './i18n/ar.js';
+
 export const locale = 'ar-EG-u-nu-latn';
 export const businessTimeZone = 'Africa/Cairo';
 const money = new Intl.NumberFormat(locale, {
@@ -16,6 +18,32 @@ const dateTime = new Intl.DateTimeFormat(locale, {
   timeStyle: 'short',
   timeZone: businessTimeZone,
 });
+const timelineDate = new Intl.DateTimeFormat(locale, {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: businessTimeZone,
+});
+const durationUnits = {
+  day: new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: 'day',
+    unitDisplay: 'long',
+  }),
+  hour: new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: 'hour',
+    unitDisplay: 'long',
+  }),
+  minute: new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: 'minute',
+    unitDisplay: 'long',
+  }),
+};
 const calendar = new Intl.DateTimeFormat(locale, {
   year: 'numeric',
   month: 'numeric',
@@ -83,4 +111,23 @@ export function formatRelative(
   if (Math.abs(seconds) >= 60)
     return relative.format(Math.trunc(seconds / 60), 'minute');
   return relative.format(seconds, 'second');
+}
+
+export function formatTimelineTime(value: DateValue) {
+  return timelineDate.format(instant(value));
+}
+export function formatDuration(elapsed: number) {
+  const minutes = Math.floor(Math.max(0, elapsed) / 60_000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (days) {
+    const whole = durationUnits.day.format(days);
+    return hours % 24
+      ? timelineUi.joinDuration(whole, durationUnits.hour.format(hours % 24))
+      : whole;
+  }
+  if (hours) return durationUnits.hour.format(hours);
+  return minutes > 0
+    ? durationUnits.minute.format(minutes)
+    : timelineUi.lessThanMinute;
 }

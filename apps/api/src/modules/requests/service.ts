@@ -35,6 +35,7 @@ import {
 import { AppError } from '../../middleware/errors.js';
 import type { Context } from '../access/endpoint.js';
 import { addItem, itemsByIds } from '../catalog/service.js';
+import type { EventBus } from '../events/bus.js';
 import { persistFulfilment } from '../fulfilment/repo.js';
 import { persistRounds } from '../purchasing/repo.js';
 
@@ -94,7 +95,7 @@ async function appendEffects(ctx: Context, result: Transition) {
           : (actor.role?.name ?? null)
         : null,
     );
-    await repo.appendNotifications(
+    const recipients = await repo.appendNotifications(
       ctx.tx,
       row.id,
       result.notify.filter(
@@ -103,7 +104,20 @@ async function appendEffects(ctx: Context, result: Transition) {
       ),
       ctx.now,
     );
+    for (const { userId } of recipients)
+      publishAfterCommit(ctx, { type: 'notification', userId });
   }
+}
+
+function publishAfterCommit(
+  ctx: Context,
+  signal: Parameters<EventBus['publish']>[0],
+) {
+  const bus: EventBus = ctx.req.app.locals.eventBus;
+  ctx.onCommit(async () => bus.publish(signal));
+}
+function requestChanged(ctx: Context, requestId: number, siteId: number) {
+  publishAfterCommit(ctx, { type: 'request.changed', requestId, siteId });
 }
 
 export async function createDraft(
@@ -126,6 +140,7 @@ export async function createDraft(
   await repo.insertRequest(ctx.tx, result.next, ctx.now);
   await appendEffects(ctx, result);
   await ctx.audit('request.create', 'Request', state.id, null, result.next);
+  requestChanged(ctx, id!, siteId);
   return getRequest(ctx, state.id);
 }
 
@@ -206,6 +221,9 @@ export async function runTransition<
         null,
         result.copiedDraft,
       );
+    requestChanged(ctx, requestId, result.next.siteId);
+    if (result.copiedDraft)
+      requestChanged(ctx, result.copiedDraft.id, result.copiedDraft.siteId);
     return result.next.deleted
       ? null
       : getRequest(ctx, result.copiedDraft?.id ?? requestId);
@@ -373,7 +391,9 @@ export async function list(
     ctx.viewer,
     {
       ...filters,
-      ...(queue ? repo.purchasingQueueWhere(ctx.viewer) : {}),
+      ...(queue
+        ? (repo.queueWhere(ctx.viewer, 'purchasing') ?? { id: { in: [] } })
+        : {}),
       displayedStage: stage,
       ...(q ? { number: { contains: q, mode: 'insensitive' } } : {}),
       createdAt: {
@@ -401,10 +421,40 @@ export async function getTimeline(ctx: Context, id: number) {
       : [],
   );
   const links = await repo.visibleRequestIds(ctx.tx, ctx.viewer, linkIds);
+  const batches = rows.some((row) => row.type === 'BATCH_CREATED')
+    ? await repo.timelineBatches(ctx.tx, id, ctx.viewer)
+    : [];
+  const byId = new Map(batches.map((batch) => [batch.id, batch]));
+  const batchDetails = (payload: {
+    batchId: number;
+    lineNos: number[];
+    supplierIds: number[];
+  }) => {
+    const batch = byId.get(payload.batchId);
+    return {
+      lineNos: payload.lineNos,
+      suppliers:
+        batch?.suppliers.map((supplier) => ({
+          name: supplier.supplier?.name ?? ar.requests.supplier,
+          sentAt: supplier.sentAt,
+        })) ??
+        payload.supplierIds.map(() => ({
+          name: ar.requests.supplier,
+          sentAt: null,
+        })),
+    };
+  };
   return {
     items: rows.map((row) => ({
       ...row,
       payload: timelinePayload(row.type, row.payload, ctx.viewer, links),
+      ...(row.type === 'BATCH_CREATED'
+        ? {
+            batch: batchDetails(
+              row.payload as Parameters<typeof batchDetails>[0],
+            ),
+          }
+        : {}),
     })),
   };
 }

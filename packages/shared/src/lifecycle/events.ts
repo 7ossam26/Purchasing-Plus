@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 import { id } from '../access.js';
-import { ar } from '../i18n/ar.js';
+import { formatNumber } from '../formatters.js';
+import { ar, timelineUi } from '../i18n/ar.js';
 
 import {
   amount,
@@ -126,22 +127,40 @@ export type EventDraft<K extends EventType = EventType> = {
   };
 }[K];
 export function describeEvent(
-  event: EventDraft & {
+  event: {
+    type: EventType;
+    payload: object;
     actorName?: string | null;
     actorRoleName?: string | null;
   },
+  batchSupplierCount?: number,
 ): string {
-  const verb = ar.lifecycle.events[event.type];
+  const { reason, note, lineNo } = event.payload as {
+    reason?: string;
+    note?: string | null;
+    lineNo?: number;
+  };
+  const line = lineNo === undefined ? '' : formatNumber(lineNo);
+  const batch =
+    batchSupplierCount === undefined
+      ? undefined
+      : batchSupplierCount === 1
+        ? timelineUi.batchRequestedOne
+        : batchSupplierCount === 2
+          ? timelineUi.batchRequestedTwo
+          : timelineUi.batchRequested(formatNumber(batchSupplierCount));
+  const verb =
+    event.type === 'BATCH_CREATED' && batch
+      ? batch
+      : event.type === 'ITEM_UNAVAILABLE' && line
+        ? timelineUi.unavailable(line)
+        : event.type === 'ITEM_RESOLVED_EXTERNALLY'
+          ? timelineUi.resolvedExternally(line)
+          : ar.lifecycle.events[event.type];
   const by = event.actorName
     ? ` ${event.actorName}${event.actorRoleName ? ` (${event.actorRoleName})` : ''}`
     : '';
-  const detail =
-    'reason' in event.payload
-      ? event.payload.reason
-      : 'note' in event.payload
-        ? event.payload.note
-        : null;
-  // Put the subject after the verb for natural Arabic word order.
+  const detail = reason ?? note;
   const space = verb.indexOf(' ');
   return `${verb.slice(0, space)}${by}${verb.slice(space)}${detail ? ` — ${detail}` : ''}.`;
 }

@@ -17,7 +17,7 @@ import {
 import { purchasingKeys } from '@purchasing-plus/shared/permissions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Link,
   Navigate,
@@ -59,7 +59,8 @@ import { PurchasingTab } from './purchasing-tab.js';
 import { usePurchaseWrites } from './purchasing-writes.js';
 import { ReceiptTab } from './receipt.js';
 import { ResolveItem } from './remaining-items.js';
-import { ItemRows, RequestHeader, StageRail, Timeline } from './summary.js';
+import { ItemRows, RequestHeader, StageRail } from './summary.js';
+import { Timeline } from './timeline.js';
 import {
   draftForm,
   hasAction,
@@ -229,12 +230,6 @@ export function RequestDetailPage() {
     )
     .at(-1);
   const highlight = jump > 0 ? currentEntry?.id : undefined;
-  useEffect(() => {
-    if (tab !== 'timeline' || !jump || highlight === undefined) return;
-    const row = document.getElementById('request-event-' + highlight);
-    row?.scrollIntoView?.({ block: 'start' });
-    row?.focus({ preventScroll: true });
-  }, [highlight, jump, tab]);
 
   function saveCommand(
     command: RequestCommand,
@@ -628,11 +623,13 @@ export function RequestDetailPage() {
                   id: 'timeline',
                   label: copy.timeline,
                   content: (
-                    <LoadRecord query={timeline}>
-                      {(data) => (
-                        <Timeline events={data.items} highlight={highlight} />
-                      )}
-                    </LoadRecord>
+                    <Timeline
+                      key={jump}
+                      events={timeline.data?.items}
+                      error={timeline.error}
+                      retry={() => void timeline.refetch()}
+                      highlight={highlight}
+                    />
                   ),
                 },
               ]

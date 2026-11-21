@@ -8,6 +8,7 @@ import { LoadRecord } from '../../components/shared/record-feedback.js';
 import { useConfirm } from '../../components/ui/dialogs.js';
 import { toast } from '../../components/ui/toast.js';
 import { ApiError } from '../../lib/api/client.js';
+import { inboxKey } from '../../lib/api/live.js';
 import { purchasingKey, type PauseEdit } from '../../lib/api/purchasing.js';
 import {
   requestApi,
@@ -122,11 +123,13 @@ export function useRequestUpdates(id: number) {
   const client = useQueryClient();
   function update(request: RequestDto) {
     client.setQueryData(requestKey(request.id), request);
+    void client.invalidateQueries({ queryKey: inboxKey });
     void client.invalidateQueries({ queryKey: ['requests', 'list'] });
     void client.invalidateQueries({ queryKey: timelineKey(id) });
     return client.invalidateQueries({ queryKey: purchasingKey(id) });
   }
   function refresh() {
+    void client.invalidateQueries({ queryKey: inboxKey });
     void client.invalidateQueries({ queryKey: ['requests', 'list'] });
     void client.invalidateQueries({ queryKey: timelineKey(id) });
     return Promise.all([

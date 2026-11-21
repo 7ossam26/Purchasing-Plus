@@ -5,7 +5,9 @@ import { Link, Outlet } from 'react-router';
 
 import { Button, buttonClass } from '../../components/ui/button.js';
 import { Logo } from '../../components/ui/logo.js';
+import { NotificationBell } from '../../features/inbox/bell.js';
 import { useBack } from '../navigation.js';
+import { useCan } from '../session.js';
 
 import { AccountMenu } from './account-menu.js';
 
@@ -17,9 +19,10 @@ export function TopBar({
   notificationSlot?: ReactNode;
 }) {
   const back = useBack();
+  const canViewRequests = useCan('requests.view');
   return (
     <header className="fixed start-0 end-0 top-0 z-30 border-b border-seam bg-paper">
-      <div className="mx-auto grid h-topbar max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-1 px-2 sm:gap-3 sm:px-6">
+      <div className="mx-auto grid h-topbar max-w-7xl grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 px-2 sm:gap-3 sm:px-6">
         <div className="flex items-center">
           {navigation}
           <Button
@@ -38,7 +41,9 @@ export function TopBar({
           </Button>
           <Link
             to="/"
-            className={buttonClass('ghost', true)}
+            className={
+              buttonClass('ghost', true) + (navigation ? ' max-sm:hidden' : '')
+            }
             aria-label={ar.common.home}
           >
             <House size={24} strokeWidth={1.75} aria-hidden="true" />
@@ -53,7 +58,7 @@ export function TopBar({
           <Logo />
         </Link>
         <div className="flex items-center justify-self-end">
-          {notificationSlot}
+          {notificationSlot ?? (canViewRequests && <NotificationBell />)}
           <AccountMenu />
         </div>
       </div>

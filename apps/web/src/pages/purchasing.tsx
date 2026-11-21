@@ -10,11 +10,16 @@ import { EmptyState } from '../components/ui/states.js';
 import { RequestFacts } from '../features/requests/summary.js';
 import { requestHref } from '../features/requests/workspace.js';
 import { requestApi } from '../lib/api/requests.js';
+import { settingsApi } from '../lib/api/settings.js';
 
 export function PurchasingPage() {
   const [params, setParams] = useSearchParams();
   const rawPage = Number(params.get('page'));
   const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+  const settings = useQuery({
+    queryKey: ['settings'],
+    queryFn: ({ signal }) => settingsApi.get(signal),
+  });
   const query = useQuery({
     queryKey: ['requests', 'list', 'purchasing', page],
     queryFn: ({ signal }) =>
@@ -43,7 +48,11 @@ export function PurchasingPage() {
                             {copy.count(formatNumber(request.items.length))}
                           </span>
                         </div>
-                        <RequestFacts request={request} showTime />
+                        <RequestFacts
+                          request={request}
+                          showTime
+                          agingDays={settings.data?.agingDays}
+                        />
                       </div>
                       <ChevronRight
                         size={20}

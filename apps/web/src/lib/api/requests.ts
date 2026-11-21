@@ -8,6 +8,7 @@ import type {
   ActionName,
   DisplayedStage,
   EventDraft,
+  EventType,
   ItemState,
   RequestItem,
   RequestStatus,
@@ -68,7 +69,28 @@ export type RequestDto = {
   items: RequestLine[];
   availableActions: { action: ActionName; hint: ActionHint }[];
 };
-export type RequestEvent = EventDraft & {
+export type RequestSummary = Pick<
+  RequestDto,
+  | 'id'
+  | 'number'
+  | 'urgency'
+  | 'isModified'
+  | 'displayedStage'
+  | 'stageStartedAt'
+  | 'site'
+  | 'category'
+  | 'creator'
+  | 'stateCounts'
+>;
+export type RequestEvent = {
+  [T in EventType]: Omit<EventDraft<T>, 'payload'> & {
+    payload: Partial<EventDraft<T>['payload']>;
+  };
+}[EventType] & {
+  batch?: {
+    lineNos: number[];
+    suppliers: { name: string; sentAt: string | null }[];
+  };
   id: number;
   actorName: string | null;
   actorRoleName: string | null;

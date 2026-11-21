@@ -5,7 +5,6 @@ import {
   formatNumber,
 } from '@purchasing-plus/shared';
 import {
-  ar,
   fulfilmentUi as fulfilment,
   requestUi as copy,
 } from '@purchasing-plus/shared/i18n/ar';
@@ -25,7 +24,7 @@ import { EmptyState } from '../../components/ui/states.js';
 import type { ActorSnapshot } from '../../lib/api/fulfilment.js';
 import type {
   RequestDto,
-  RequestEvent,
+  RequestSummary,
   RequestLine,
 } from '../../lib/api/requests.js';
 
@@ -148,10 +147,12 @@ export function RequestFacts({
   request,
   agingDays,
   showTime = false,
+  showCounts = false,
 }: {
-  request: RequestDto;
+  request: RequestSummary;
   agingDays?: number;
   showTime?: boolean;
+  showCounts?: boolean;
 }) {
   const present = itemStates.filter(
     (state) => state !== 'REMOVED' && request.stateCounts[state] > 0,
@@ -161,16 +162,21 @@ export function RequestFacts({
     isAging(request.stageStartedAt, new Date(), agingDays);
   return (
     <div className="grid min-w-0 gap-2">
-      <p className="wrap-anywhere text-small text-concrete">
-        <bdi>{request.site.name}</bdi> · <bdi>{request.category.name}</bdi> ·{' '}
-        <bdi>{request.creator.name}</bdi>
-      </p>
+      <ul className="flex flex-wrap gap-x-2 gap-y-1 text-small text-concrete">
+        {[request.site.name, request.category.name, request.creator.name].map(
+          (name, index) => (
+            <li key={index} className="min-w-0 wrap-anywhere">
+              <bdi>{name}</bdi>
+            </li>
+          ),
+        )}
+      </ul>
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusChip status={request.displayedStage} />
         <StatusChip status={request.urgency} />
         {request.isModified && <Chip>{copy.modified}</Chip>}
         {aging && <StatusChip status="OVERDUE" />}
-        {present.length > 1 &&
+        {(showCounts || present.length > 1) &&
           present.map((state) => (
             <StatusChip
               key={state}
@@ -345,42 +351,5 @@ export function ItemRows({
         </p>
       )}
     </div>
-  );
-}
-
-export function Timeline({
-  events,
-  highlight,
-}: {
-  events: RequestEvent[];
-  highlight?: number;
-}) {
-  if (!events.length) return <EmptyState title={copy.noEvents} />;
-  return (
-    <ol className="divide-y divide-seam rounded-panel border border-seam bg-paper">
-      {events.map((event) => (
-        <li
-          id={'request-event-' + event.id}
-          key={event.id}
-          tabIndex={event.id === highlight ? 0 : undefined}
-          className={`scroll-mt-24 px-4 py-3 ${event.id === highlight ? 'bg-ppr-wash' : ''}`}
-        >
-          <p className="wrap-anywhere font-semibold">
-            {ar.lifecycle.events[event.type]}
-          </p>
-          <p className="wrap-anywhere text-small text-concrete">
-            {event.actorName && (
-              <>
-                <bdi>{event.actorName}</bdi> ·{' '}
-              </>
-            )}
-            <bdi>{formatDateTime(event.at)}</bdi>
-          </p>
-          {'reason' in event.payload && (
-            <p className="wrap-anywhere text-small">{event.payload.reason}</p>
-          )}
-        </li>
-      ))}
-    </ol>
   );
 }

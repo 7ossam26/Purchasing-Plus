@@ -9,6 +9,7 @@ import { HomePage } from '../pages/home.js';
 import { LoginPage } from '../pages/login.js';
 import { SystemPage } from '../pages/system.js';
 
+import { LiveEvents } from './live-events.js';
 import { ProtectedRoute } from './protected-route.js';
 import { SessionLoading } from './session-state.js';
 import { SessionProvider } from './session.js';
@@ -19,6 +20,7 @@ import { StandardShell } from './shells/standard.js';
 export function AppProviders() {
   return (
     <SessionProvider>
+      <LiveEvents />
       <DialogProvider>
         <Outlet />
         <Toast />

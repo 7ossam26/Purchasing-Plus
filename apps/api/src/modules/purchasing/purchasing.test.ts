@@ -417,6 +417,41 @@ it('validates batch selections, tweaks messages and marks sent only once under a
     lineNos: [1, 2],
     supplierIds: [firstSupplier, secondSupplier],
   });
+  expect(rows[0]).toMatchObject({
+    batch: {
+      lineNos: [1, 2],
+      suppliers: [
+        { name: 'سيراميك ألف', sentAt: originalTime },
+        { name: 'سيراميك باء', sentAt: null },
+      ],
+    },
+  });
+  const historyViewer = await user(
+    'purchasing-history',
+    ['requests.viewTimeline'],
+    [siteId],
+  );
+  const redacted = await send(
+    'get',
+    '/' + r.id + '/timeline',
+    undefined,
+    historyViewer,
+  ).expect(200);
+  expect(
+    redacted.body.items.find(
+      (event: { type: string }) => event.type === 'BATCH_CREATED',
+    ),
+  ).toMatchObject({
+    payload: { batchId: batch.id, lineNos: [1, 2] },
+    batch: {
+      lineNos: [1, 2],
+      suppliers: [
+        { name: 'مورد', sentAt: originalTime },
+        { name: 'مورد', sentAt: null },
+      ],
+    },
+  });
+  expect(redacted.text).not.toMatch(/سيراميك ألف|سيراميك باء|supplierId/);
   expect(
     await db.auditLog.count({
       where: { action: 'request.markBatchSent', entityId: String(r.id) },

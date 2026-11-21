@@ -13,7 +13,9 @@ import {
   type Viewer,
 } from './model.js';
 
-export function stateCounts(state: RequestState): Record<ItemState, number> {
+export function stateCounts(state: {
+  items: readonly { state: ItemState }[];
+}): Record<ItemState, number> {
   const counts = Object.fromEntries(itemStates.map((s) => [s, 0])) as Record<
     ItemState,
     number
@@ -94,6 +96,35 @@ export const purchasingQueueRules: readonly PurchasingQueueRule[] = [
     anyOf: ['purchasing.sendSupplyOrder'],
   },
 ];
+type QueueRule = Omit<PurchasingQueueRule, 'status'> & {
+  status: RequestState['status'];
+  own?: true;
+};
+const draftRule = { anyOf: ['requests.create'], own: true } as const;
+export const queueRules: Record<Queue, readonly QueueRule[]> = {
+  drafts: [
+    { status: 'DRAFT', ...draftRule },
+    { status: 'RETURNED', ...draftRule },
+  ],
+  manager: [{ status: 'AWAITING_MANAGER', anyOf: ['requests.approve'] }],
+  purchasing: purchasingQueueRules,
+  pricingApproval: [
+    {
+      status: 'FULFILMENT',
+      items: ['AWAITING_APPROVAL'],
+      anyOf: ['pricing.approve'],
+    },
+  ],
+  receipt: [
+    {
+      status: 'FULFILMENT',
+      items: ['AWAITING_RECEIPT'],
+      anyOf: ['receipt.record'],
+    },
+  ],
+  paused: [{ status: 'PAUSED', anyOf: ['requests.editWhilePaused'] }],
+};
+
 export function inQueue(
   queue: Queue,
   state: RequestState,
@@ -101,43 +132,13 @@ export function inQueue(
 ): boolean {
   if (state.deleted || isFinal(state.status) || !inSite(viewer, state.siteId))
     return false;
-  const has = (stateName: ItemState) =>
-    state.items.some((i) => i.state === stateName);
-  switch (queue) {
-    case 'drafts':
-      return (
-        (state.status === 'DRAFT' || state.status === 'RETURNED') &&
-        state.createdById === viewer.userId &&
-        holds(viewer, 'requests.create')
-      );
-    case 'manager':
-      return (
-        state.status === 'AWAITING_MANAGER' && holds(viewer, 'requests.approve')
-      );
-    case 'paused':
-      return (
-        state.status === 'PAUSED' && holds(viewer, 'requests.editWhilePaused')
-      );
-    case 'pricingApproval':
-      return (
-        state.status === 'FULFILMENT' &&
-        has('AWAITING_APPROVAL') &&
-        holds(viewer, 'pricing.approve')
-      );
-    case 'receipt':
-      return (
-        state.status === 'FULFILMENT' &&
-        has('AWAITING_RECEIPT') &&
-        holds(viewer, 'receipt.record')
-      );
-    case 'purchasing':
-      return purchasingQueueRules.some(
-        (rule) =>
-          rule.status === state.status &&
-          rule.anyOf.some((key) => holds(viewer, key)) &&
-          (!rule.items || rule.items.some(has)) &&
-          (!rule.unsentOrder ||
-            state.supplyOrders.some((order) => !order.sent)),
-      );
-  }
+  return queueRules[queue].some(
+    (rule) =>
+      rule.status === state.status &&
+      rule.anyOf.some((key) => holds(viewer, key)) &&
+      (!rule.own || state.createdById === viewer.userId) &&
+      (!rule.items ||
+        state.items.some((item) => rule.items!.includes(item.state))) &&
+      (!rule.unsentOrder || state.supplyOrders.some((order) => !order.sent)),
+  );
 }

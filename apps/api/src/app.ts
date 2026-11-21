@@ -18,6 +18,13 @@ import { attributes } from './modules/attributes/routes.js';
 import { catalog } from './modules/catalog/routes.js';
 import { catalogImages } from './modules/catalog-images/routes.js';
 import { catalogTree } from './modules/catalog-tree/routes.js';
+import {
+  MemoryEventBus,
+  StreamTickets,
+  type EventBus,
+} from './modules/events/bus.js';
+import { events } from './modules/events/routes.js';
+import { inbox } from './modules/inbox/routes.js';
 import { requests } from './modules/requests/routes.js';
 import { settings } from './modules/settings/routes.js';
 import { suppliers } from './modules/suppliers/routes.js';
@@ -28,6 +35,7 @@ export interface AppOptions {
   env?: AppEnv;
   storage?: StorageDriver;
   clock?: () => Date;
+  eventBus?: EventBus;
 }
 
 export function createApp({
@@ -35,6 +43,7 @@ export function createApp({
   env = parseEnv(process.env),
   storage = createStorage(env),
   clock = () => new Date(),
+  eventBus = new MemoryEventBus(),
 }: AppOptions) {
   const app = express();
   const db = new PrismaClient({
@@ -42,6 +51,8 @@ export function createApp({
   });
   app.locals.db = db;
   app.locals.clock = clock;
+  app.locals.eventBus = eventBus;
+  app.locals.streamTickets = new StreamTickets();
 
   app.locals.env = env;
   app.locals.storage = storage;
@@ -71,7 +82,7 @@ export function createApp({
   if (storage instanceof LocalStorage)
     app.get(mediaPath + '/*key', storage.serve);
   app.use(express.json());
-  app.use('/api/v1', accessRoutes());
+  app.use('/api/v1', accessRoutes(), events, inbox);
   app.use('/api/v1/settings', settings);
   app.use('/api/v1', attributes);
   app.use('/api/v1/catalog', catalogImages, catalog);

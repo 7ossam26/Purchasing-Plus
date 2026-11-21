@@ -16,12 +16,13 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
-export async function api<T>(
+async function apiResponse(
   path: string,
   { body, ...options }: Omit<RequestInit, 'body'> & { body?: unknown } = {},
-): Promise<T> {
+  accept = 'application/json',
+): Promise<Response> {
   const headers = new Headers(options.headers);
-  headers.set('Accept', 'application/json');
+  headers.set('Accept', accept);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   let response: Response;
   try {
@@ -51,5 +52,17 @@ export async function api<T>(
       payload?.fix,
     );
   }
+  return response;
+}
+
+export async function api<T>(
+  path: string,
+  options?: Omit<RequestInit, 'body'> & { body?: unknown },
+): Promise<T> {
+  const response = await apiResponse(path, options);
   return (response.status === 204 ? undefined : await response.json()) as T;
+}
+
+export async function download(path: string, accept: string) {
+  return (await apiResponse(path, undefined, accept)).blob();
 }

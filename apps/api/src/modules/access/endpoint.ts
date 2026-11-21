@@ -27,13 +27,14 @@ export type Context = {
     newValue?: unknown,
   ) => Promise<unknown>;
 };
-export function endpoint(
+export function endpoint<T>(
   keys: PermissionKey[],
-  handler: (ctx: Context) => Promise<unknown>,
+  handler: (ctx: Context) => Promise<T>,
   status = 200,
   afterCommit?: (response: Response) => void,
   prepare?: RequestHandler,
   concurrentWrite = false,
+  respond?: (result: T, response: Response) => void | Promise<void>,
 ): RequestHandler[] {
   return [
     requireSession,
@@ -87,7 +88,9 @@ export function endpoint(
       });
       for (const handler of commit) await handler();
       afterCommit?.(res);
-      res.status(status).json(result);
+      res.status(status);
+      if (respond) await respond(result, res);
+      else res.json(result);
     },
   ];
 }

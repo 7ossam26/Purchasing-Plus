@@ -1,4 +1,8 @@
-import { ar, uiPreview } from '@purchasing-plus/shared/i18n/ar';
+import {
+  recordDestinations,
+  reportDestinations,
+} from '@purchasing-plus/shared';
+import { ar, reportsUi, uiPreview } from '@purchasing-plus/shared/i18n/ar';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
   cleanup,
@@ -59,6 +63,102 @@ function loginForm() {
   });
   fireEvent.click(screen.getByRole('button', { name: ar.auth.login }));
 }
+
+describe('reports hub', () => {
+  it.each(reportDestinations)(
+    'shows the %s tile only to a holder of its key',
+    async (id, key) => {
+      setup('/reports', (path) =>
+        path.endsWith('/me')
+          ? json({ ...profile, permissions: ['requests.view', key] })
+          : json({ items: [] }),
+      );
+      await screen.findByRole('heading', { name: reportsUi.title });
+      const tiles = screen
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('href')?.startsWith('/reports/'));
+      expect(tiles.map((tile) => tile.getAttribute('href'))).toEqual([
+        '/reports/' + id,
+      ]);
+      expect(tiles[0]?.textContent).toContain(reportsUi.destinations[id].title);
+    },
+  );
+
+  it('shows all three logs to a holder of records.view and hides the report tiles', async () => {
+    setup('/reports', (path) =>
+      path.endsWith('/me')
+        ? json({ ...profile, permissions: ['requests.view', 'records.view'] })
+        : json({ items: [] }),
+    );
+    await screen.findByRole('heading', { name: reportsUi.records });
+    const tiles = screen
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href')?.startsWith('/reports/'));
+    expect(tiles.map((tile) => tile.getAttribute('href'))).toEqual(
+      recordDestinations.map(([id]) => '/reports/records/' + id),
+    );
+  });
+
+  it('does not expose the hub or allow access to a different report through a direct link', async () => {
+    const { router } = setup('/', () => json(profile));
+    await screen.findByRole('heading', { name: ar.navigation.modules });
+    expect(
+      screen.queryByRole('link', { name: new RegExp(reportsUi.title) }),
+    ).toBeNull();
+    await router.navigate('/reports/price-history');
+    await screen.findByRole('heading', { name: ar.errors.denied });
+  });
+
+  it('applies record filters, resets paging, and keeps the Excel action permission gated', async () => {
+    const { fetch } = setup('/reports/records/requests', (path) => {
+      if (path.endsWith('/me'))
+        return json({
+          ...profile,
+          permissions: ['requests.view', 'records.view'],
+        });
+      if (path.endsWith('/reports/options'))
+        return json({
+          sites: [{ id: 1, name: 'المعادي' }],
+          categories: [],
+          creators: [],
+        });
+      if (path.includes('/records/requests?')) {
+        const params = new URL(path, 'http://localhost').searchParams;
+        return json({
+          total: params.has('q') ? 0 : 60,
+          page: Number(params.get('page')),
+          pageSize: 30,
+          period: null,
+          main: { title: reportsUi.logs.requests.title, columns: [], rows: [] },
+        });
+      }
+      return json({ items: [] });
+    });
+    fireEvent.click(
+      await screen.findByRole('button', { name: reportsUi.next }),
+    );
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([path]) => path.includes('page=2'))).toBe(
+        true,
+      ),
+    );
+    fireEvent.change(screen.getByLabelText(reportsUi.searchNumber), {
+      target: { value: '2026-001' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: reportsUi.apply }));
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(
+          ([path]) => path.includes('q=2026-001') && path.includes('page=1'),
+        ),
+      ).toBe(true),
+    );
+    expect(screen.queryByRole('button', { name: reportsUi.export })).toBeNull();
+    expect(screen.getByLabelText(reportsUi.site).textContent).not.toContain(
+      reportsUi.allSites,
+    );
+  });
+});
 
 describe('session and protected routes', () => {
   it('redirects a signed-out visitor and resumes the full requested URL after login', async () => {

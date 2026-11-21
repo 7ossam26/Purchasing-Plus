@@ -25,6 +25,7 @@ import {
 } from './modules/events/bus.js';
 import { events } from './modules/events/routes.js';
 import { inbox } from './modules/inbox/routes.js';
+import { reports } from './modules/reports/routes.js';
 import { requests } from './modules/requests/routes.js';
 import { settings } from './modules/settings/routes.js';
 import { suppliers } from './modules/suppliers/routes.js';
@@ -82,7 +83,7 @@ export function createApp({
   if (storage instanceof LocalStorage)
     app.get(mediaPath + '/*key', storage.serve);
   app.use(express.json());
-  app.use('/api/v1', accessRoutes(), events, inbox);
+  app.use('/api/v1', accessRoutes(), events, inbox, reports);
   app.use('/api/v1/settings', settings);
   app.use('/api/v1', attributes);
   app.use('/api/v1/catalog', catalogImages, catalog);

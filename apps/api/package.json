@@ -21,6 +21,7 @@
     "@prisma/client": "7.10.1",
     "@purchasing-plus/shared": "workspace:*",
     "busboy": "^1.6.0",
+    "exceljs": "^4.4.0",
     "express": "^5.0.0",
     "express-rate-limit": "^8.7.5",
     "file-type": "^22.3.0",

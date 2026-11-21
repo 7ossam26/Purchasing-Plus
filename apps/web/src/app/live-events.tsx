@@ -46,7 +46,8 @@ export function LiveEvents() {
               ['requests', 'list'],
               ['requests', 'recent'],
             ];
-      for (const queryKey of [...keys, inboxKey]) refresh(queryKey);
+      for (const queryKey of [...keys, inboxKey, ['reports']])
+        refresh(queryKey);
     }
     function resume(event: MessageEvent<string>) {
       if (event.lastEventId) cursor = event.lastEventId;

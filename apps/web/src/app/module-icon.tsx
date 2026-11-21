@@ -1,5 +1,8 @@
 import {
+  ChartColumn,
+  ClipboardCheck,
   ClipboardList,
+  Clock,
   ShoppingCart,
   Database,
   Folder,
@@ -7,6 +10,9 @@ import {
   Key,
   MapPin,
   Package,
+  PackageCheck,
+  PackageX,
+  Receipt,
   Settings,
   Shield,
   Users,
@@ -14,7 +20,10 @@ import {
 } from 'lucide-react';
 
 const icons = {
+  ChartColumn,
+  ClipboardCheck,
   ClipboardList,
+  Clock,
   ShoppingCart,
   Database,
   Folder,
@@ -22,6 +31,9 @@ const icons = {
   Key,
   MapPin,
   Package,
+  PackageCheck,
+  PackageX,
+  Receipt,
   Settings,
   Shield,
   Users,

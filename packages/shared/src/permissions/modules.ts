@@ -1,4 +1,10 @@
-import { masterData as copy, purchasingUi, requestUi } from '../i18n/ar.js';
+import {
+  masterData as copy,
+  purchasingUi,
+  reportsUi,
+  requestUi,
+} from '../i18n/ar.js';
+import { reportHubKeys } from '../reports.js';
 
 import type { PermissionKey } from './registry.js';
 import { purchasingKeys } from './registry.js';
@@ -40,6 +46,15 @@ export const modules: Module[] = [
     path: '/catalog',
     kind: 'operations',
     anyOf: ['catalog.view'],
+  },
+  {
+    id: 'reports',
+    label: reportsUi.title,
+    description: reportsUi.description,
+    icon: 'ChartColumn',
+    path: '/reports',
+    kind: 'reports',
+    anyOf: reportHubKeys,
   },
   {
     id: 'users',

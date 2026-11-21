@@ -1,3 +1,7 @@
+import {
+  recordDestinations,
+  reportDestinations,
+} from '@purchasing-plus/shared';
 import { ar } from '@purchasing-plus/shared/i18n/ar';
 import { modules } from '@purchasing-plus/shared/permissions';
 import { Outlet, type RouteObject } from 'react-router';
@@ -56,6 +60,57 @@ const childPages: Partial<Record<string, RouteObject['lazy']>> = {
     Component: (await import('../pages/admin/role-editor.js')).RoleEditorPage,
   }),
 };
+
+function reportRoutes(
+  path: string,
+  anyOf: (typeof modules)[number]['anyOf'],
+): RouteObject {
+  return {
+    path,
+    element: <ProtectedRoute anyOf={anyOf} />,
+    children: [
+      {
+        element: <StandardShell />,
+        children: [
+          {
+            index: true,
+            lazy: async () => ({
+              Component: (await import('../pages/reports-hub.js')).ReportsHub,
+            }),
+          },
+          ...reportDestinations.map(([id, key]): RouteObject => ({
+            path: id,
+            element: <ProtectedRoute anyOf={[key]} />,
+            children: [
+              {
+                index: true,
+                lazy: async () => {
+                  const { ReportExplorer } =
+                    await import('../features/reports/explorer.js');
+                  return { Component: () => <ReportExplorer id={id} /> };
+                },
+              },
+            ],
+          })),
+          ...recordDestinations.map(([id]): RouteObject => ({
+            path: 'records/' + id,
+            element: <ProtectedRoute anyOf={['records.view']} />,
+            children: [
+              {
+                index: true,
+                lazy: async () => {
+                  const { RecordExplorer } =
+                    await import('../features/reports/explorer.js');
+                  return { Component: () => <RecordExplorer id={id} /> };
+                },
+              },
+            ],
+          })),
+        ],
+      },
+    ],
+  };
+}
 
 function catalogRoute(
   path: string,
@@ -131,6 +186,7 @@ function moduleRoutes(): RouteObject[] {
   return modules.map((module) => {
     if (module.id === 'catalog') return catalogRoute(module.path, module.anyOf);
     if (module.id === 'requests') return requestRoutes(module.path);
+    if (module.id === 'reports') return reportRoutes(module.path, module.anyOf);
     const shell = module.kind === 'admin' ? <AdminShell /> : <StandardShell />;
     const page = modulePages[module.id];
     return {

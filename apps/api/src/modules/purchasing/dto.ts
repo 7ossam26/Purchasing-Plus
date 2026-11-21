@@ -3,6 +3,7 @@ import {
   formatEgyptianMobile,
 } from '@purchasing-plus/shared';
 import {
+  actions,
   isPricingCandidate,
   sumAmounts,
 } from '@purchasing-plus/shared/lifecycle';
@@ -14,7 +15,7 @@ import { toState, type RequestRecord } from '../requests/repo.js';
 import { type activeSuppliers, type BatchRecord } from './repo.js';
 
 type Supplier = Awaited<ReturnType<typeof activeSuppliers>>[number];
-function supplierDto(supplier: Supplier) {
+export function supplierDto(supplier: Supplier) {
   return {
     ...supplier,
     whatsappDisplay: formatEgyptianMobile(supplier.whatsappNumber),
@@ -95,6 +96,7 @@ export function toPurchasingDto(
     }
   }
   const priced = state.items.filter(isPricingCandidate);
+  const submit = actions.submitPricing.available(state, viewer);
   return {
     ...request,
     items: request.items.map((item) => {
@@ -121,6 +123,7 @@ export function toPurchasingDto(
       ? {
           pricing: {
             pricedCount: priced.length,
+            submitBlocker: submit.ok ? null : submit.code,
             unavailableCount: request.stateCounts.UNAVAILABLE,
             needsRepricingItemIds: state.items
               .filter((item) => item.state === 'OPEN' && item.needsRepricing)

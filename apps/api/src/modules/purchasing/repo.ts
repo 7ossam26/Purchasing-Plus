@@ -23,6 +23,33 @@ export function activeSuppliers(
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
   });
 }
+export async function searchSuppliers(
+  tx: Tx,
+  page: number,
+  pageSize: number,
+  q = '',
+) {
+  const search = q.replace(/[\\%_]/g, '\\$&');
+  const where = {
+    isActive: true,
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' as const } },
+            { whatsappNumber: { contains: search } },
+          ],
+        }
+      : {}),
+  };
+  const items = await tx.supplier.findMany({
+    where,
+    select: supplierFields,
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  });
+  return { items, total: await tx.supplier.count({ where }), page, pageSize };
+}
 export const batchSummary = {
   orderBy: { id: 'asc' },
   select: {

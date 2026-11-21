@@ -1,4 +1,9 @@
-import { ar, requestUi as copy } from '@purchasing-plus/shared/i18n/ar';
+import { formatDateTime } from '@purchasing-plus/shared';
+import {
+  ar,
+  purchasingUi as buying,
+  requestUi as copy,
+} from '@purchasing-plus/shared/i18n/ar';
 import {
   quantity,
   sameDecimal,
@@ -8,12 +13,19 @@ import {
   type DisplayedStage,
   type Urgency,
 } from '@purchasing-plus/shared/lifecycle';
+import { purchasingKeys } from '@purchasing-plus/shared/permissions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router';
+import {
+  Link,
+  Navigate,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router';
 
-import { useCan, useCanOnSite } from '../../app/session.js';
+import { useCan, useCanAny, useCanOnSite } from '../../app/session.js';
 import {
   ActionBar,
   type BarAction,
@@ -29,6 +41,7 @@ import { Modal } from '../../components/ui/modal.js';
 import { Tabs } from '../../components/ui/tabs.js';
 import { toast } from '../../components/ui/toast.js';
 import { ApiError } from '../../lib/api/client.js';
+import { purchasingApi } from '../../lib/api/purchasing.js';
 import {
   requestApi,
   requestKey,
@@ -40,10 +53,12 @@ import { settingsApi } from '../../lib/api/settings.js';
 import { ItemEditor } from '../catalog/ItemEditor.js';
 
 import { QuantityField, RequestFields, UrgencyChoices } from './forms.js';
+import { PurchasingTab } from './purchasing-tab.js';
 import { ItemRows, RequestHeader, StageRail, Timeline } from './summary.js';
 import {
   draftForm,
   hasAction,
+  pausedEdit,
   pickerHref,
   requestEdit,
   requestHref,
@@ -150,10 +165,14 @@ export function RequestDetailPage() {
   const confirm = useConfirm();
   const prompt = usePrompt();
   const updates = useRequestUpdates(request.id);
-  const [tab, setTab] = useState('items');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(() =>
+    params.get('tab') === 'purchasing' ? 'purchasing' : 'items',
+  );
   const [jump, setJump] = useState(0);
   const [mode, setMode] = useState<Mode>();
   const canTimeline = useCan('requests.viewTimeline');
+  const canPurchase = useCanAny(purchasingKeys);
   const canBrowse = useCan('catalog.view');
   const createCatalog = useCanOnSite('catalog.create', request.siteId);
   const timeline = useQuery({
@@ -275,9 +294,23 @@ export function RequestDetailPage() {
       },
     });
   }
-  function startRevision() {
+  async function pause(verb: 'pause' | 'purchasing-return') {
+    const reason = await prompt({
+      title: verb === 'pause' ? buying.pauseQuestion : buying.returnQuestion,
+      confirmLabel: verb === 'pause' ? buying.pause : buying.returnForEdit,
+      mode: 'reason',
+    });
+    if (reason !== null)
+      saveCommand(
+        verb,
+        verb === 'pause' ? buying.pausedToast : buying.returnedToast,
+        { reason },
+      );
+  }
+  function startRevision(mode: 'beforeApproval' | 'paused') {
     setTab('items');
-    setRevision({ form: draftForm(request), version: request.version });
+    const form = draftForm(request);
+    setRevision({ form, original: form, mode, version: request.version });
   }
   const handlers: Partial<Record<ActionName, ActionHandler>> = {
     submit: {
@@ -302,7 +335,24 @@ export function RequestDetailPage() {
       go: () => void remove(),
       overflow: true,
     },
-    editBeforeApproval: { label: copy.edit, go: startRevision },
+    editBeforeApproval: {
+      label: copy.edit,
+      go: () => startRevision('beforeApproval'),
+    },
+    editWhilePaused: {
+      label: buying.editPaused,
+      go: () => startRevision('paused'),
+    },
+    pause: { label: buying.pause, go: () => void pause('pause') },
+    purchasingReturnForEdit: {
+      label: buying.returnForEdit,
+      go: () => void pause('purchasing-return'),
+      overflow: true,
+    },
+    resume: {
+      label: buying.resume,
+      go: () => saveCommand('resume', buying.resumedToast),
+    },
     editQuantities: {
       label: copy.editQuantities,
       go: () => setMode('quantities'),
@@ -356,6 +406,23 @@ export function RequestDetailPage() {
     (action) => action !== primary && !action.overflow,
   );
   const overflow = visible.filter((action) => action.overflow);
+  const shownTab = revision
+    ? 'items'
+    : tab === 'timeline' && canTimeline
+      ? 'timeline'
+      : tab === 'purchasing' && canPurchase
+        ? 'purchasing'
+        : 'items';
+  const purchasingSelected = shownTab === 'purchasing';
+  const toolbar = (
+    <ActionBar
+      stickyOnDesktop
+      sticky={!purchasingSelected}
+      primary={primary?.bar}
+      secondary={inline.map((action) => action.bar)}
+      overflow={overflow.map((action) => action.bar)}
+    />
+  );
   const beforeTerminal = events
     .filter((event) => !terminal.has(event.stageAfter))
     .at(-1)?.stageAfter;
@@ -363,6 +430,7 @@ export function RequestDetailPage() {
     <>
       <RequestFields
         locked={request.urgencyLocked}
+        hideUrgency={revision.mode === 'paused'}
         form={revision.form}
         units={options.data?.units ?? []}
         expanded
@@ -411,6 +479,26 @@ export function RequestDetailPage() {
           </p>
         </aside>
       )}
+      {request.pauseReason && (
+        <aside className="grid gap-1 rounded-panel border border-distinct-fg bg-distinct-bg p-3 text-distinct-fg">
+          <h2 className="text-subtitle">{buying.paused}</h2>
+          <p className="whitespace-pre-wrap wrap-anywhere">
+            {request.pauseReason}
+          </p>
+          <div className="flex flex-wrap gap-x-3 text-small">
+            {request.pauser && (
+              <span>
+                {buying.pausedBy} <bdi>{request.pauser.name}</bdi>
+              </span>
+            )}
+            {request.pausedAt && (
+              <time dateTime={request.pausedAt} aria-label={buying.pausedAt}>
+                {formatDateTime(request.pausedAt)}
+              </time>
+            )}
+          </div>
+        </aside>
+      )}
       {!revision && (request.unitOrClient || request.note) && (
         <dl className="grid gap-2 rounded-panel border border-seam bg-paper p-3 text-small">
           {request.unitOrClient && (
@@ -429,9 +517,10 @@ export function RequestDetailPage() {
           )}
         </dl>
       )}
+      {purchasingSelected && toolbar}
       <Tabs
         label={copy.tabs}
-        value={canTimeline && !revision ? tab : 'items'}
+        value={shownTab}
         onChange={(value) => {
           if (!revision) setTab(value);
         }}
@@ -442,6 +531,21 @@ export function RequestDetailPage() {
             count: request.items.length,
             content: editableItems,
           },
+          ...(canPurchase && !revision
+            ? [
+                {
+                  id: 'purchasing',
+                  label: buying.title,
+                  content: (
+                    <PurchasingTab
+                      request={request}
+                      active={purchasingSelected}
+                      template={settings.data?.rfqIntro}
+                    />
+                  ),
+                },
+              ]
+            : []),
           ...(canTimeline && !revision
             ? [
                 {
@@ -472,11 +576,20 @@ export function RequestDetailPage() {
             onClick: () =>
               write.mutate({
                 perform: () =>
-                  requestApi.save(
-                    request.id,
-                    requestEdit(revision.form, revision.version),
-                    false,
-                  ),
+                  revision.mode === 'paused'
+                    ? purchasingApi.pauseEdit(
+                        request.id,
+                        pausedEdit(
+                          revision.original,
+                          revision.form,
+                          revision.version,
+                        ),
+                      )
+                    : requestApi.save(
+                        request.id,
+                        requestEdit(revision.form, revision.version),
+                        false,
+                      ),
                 success: (value) => {
                   if (value) updates.update(value);
                   setRevision(null);
@@ -493,12 +606,7 @@ export function RequestDetailPage() {
           ]}
         />
       ) : (
-        <ActionBar
-          stickyOnDesktop
-          primary={primary?.bar}
-          secondary={inline.map((action) => action.bar)}
-          overflow={overflow.map((action) => action.bar)}
-        />
+        !purchasingSelected && toolbar
       )}
       {mode === 'urgency' && (
         <UrgencySheet

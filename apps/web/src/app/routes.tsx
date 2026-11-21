@@ -27,6 +27,9 @@ export function AppProviders() {
   );
 }
 const modulePages: Partial<Record<string, RouteObject['lazy']>> = {
+  purchasing: async () => ({
+    Component: (await import('../pages/purchasing.js')).PurchasingPage,
+  }),
   users: async () => ({
     Component: (await import('../pages/admin/users.js')).UsersPage,
   }),

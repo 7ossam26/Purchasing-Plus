@@ -8,6 +8,7 @@ import { LoadRecord } from '../../components/shared/record-feedback.js';
 import { useConfirm } from '../../components/ui/dialogs.js';
 import { toast } from '../../components/ui/toast.js';
 import { ApiError } from '../../lib/api/client.js';
+import { purchasingKey, type PauseEdit } from '../../lib/api/purchasing.js';
 import {
   requestApi,
   requestKey,
@@ -75,6 +76,45 @@ export function requestEdit(form: DraftForm, version: number): RequestEdit {
     ),
   };
 }
+export function pausedEdit(
+  original: DraftForm,
+  form: DraftForm,
+  version: number,
+): PauseEdit {
+  const before = requestEdit(original, version);
+  const after = requestEdit(form, version);
+  const existing = new Map(before.items!.map((item) => [item.id!, item]));
+  const retained = new Set(
+    after.items!.flatMap((item) => (item.id === undefined ? [] : [item.id])),
+  );
+  const add: NonNullable<PauseEdit['add']> = [];
+  const change: NonNullable<PauseEdit['change']> = [];
+  for (const { id, ...line } of after.items!) {
+    if (id === undefined) {
+      add.push(line);
+      continue;
+    }
+    const old = existing.get(id)!;
+    const fields = Object.fromEntries(
+      Object.entries(line).filter(
+        ([key, value]) => old[key as keyof typeof old] !== value,
+      ),
+    );
+    if (Object.keys(fields).length) change.push({ itemId: id, fields });
+  }
+  return {
+    version,
+    fields: {
+      ...(before.note !== after.note ? { note: after.note } : {}),
+      ...(before.unitOrClient !== after.unitOrClient
+        ? { unitOrClient: after.unitOrClient }
+        : {}),
+    },
+    add,
+    change,
+    remove: [...existing.keys()].filter((id) => !retained.has(id)),
+  };
+}
 export const validLine = (line: BasketLine | RequestLine) =>
   quantity.safeParse(line.quantity).success && line.unitId > 0;
 
@@ -84,20 +124,24 @@ export function useRequestUpdates(id: number) {
     client.setQueryData(requestKey(request.id), request);
     void client.invalidateQueries({ queryKey: ['requests', 'list'] });
     void client.invalidateQueries({ queryKey: timelineKey(id) });
+    return client.invalidateQueries({ queryKey: purchasingKey(id) });
   }
   function refresh() {
-    void client.invalidateQueries({ queryKey: requestKey(id) });
     void client.invalidateQueries({ queryKey: ['requests', 'list'] });
     void client.invalidateQueries({ queryKey: timelineKey(id) });
+    return Promise.all([
+      client.invalidateQueries({ queryKey: requestKey(id) }),
+      client.invalidateQueries({ queryKey: purchasingKey(id) }),
+    ]);
   }
   function fail(error: unknown) {
-    if (error instanceof ApiError && error.status === 409) refresh();
     toast.error(
       error instanceof ApiError ? error.message : ar.common.fallbackError,
       {
         description: error instanceof ApiError ? error.fix : undefined,
       },
     );
+    if (error instanceof ApiError && error.status === 409) return refresh();
   }
   return { update, refresh, fail };
 }
@@ -229,13 +273,19 @@ function DraftGuard({ id }: { id: number }) {
   return null;
 }
 
+type Revision = {
+  form: DraftForm;
+  original: DraftForm;
+  version: number;
+  mode: 'beforeApproval' | 'paused';
+};
 function RequestContent({ request }: { request: RequestDto }) {
   const draft = useDraft(request);
-  const [revision, setRevision] = useState<{
-    form: DraftForm;
-    version: number;
-  } | null>(null);
-  const activeRevision = hasAction(request, 'editBeforeApproval')
+  const [revision, setRevision] = useState<Revision | null>(null);
+  const activeRevision = hasAction(
+    request,
+    revision?.mode === 'paused' ? 'editWhilePaused' : 'editBeforeApproval',
+  )
     ? revision
     : null;
   return (
@@ -250,8 +300,8 @@ function RequestContent({ request }: { request: RequestDto }) {
 type Workspace = {
   request: RequestDto;
   draft: ReturnType<typeof useDraft>;
-  revision: { form: DraftForm; version: number } | null;
-  setRevision: (value: { form: DraftForm; version: number } | null) => void;
+  revision: Revision | null;
+  setRevision: (value: Revision | null) => void;
 };
 const WorkspaceContext = createContext<Workspace | null>(null);
 export function useRequest() {

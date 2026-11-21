@@ -48,6 +48,14 @@ purchasing.get(
     ),
   ),
 );
+purchasing.get(
+  '/suppliers',
+  ...endpoint(['purchasing.price', 'requests.viewSupplierNames'], (ctx) =>
+    service.searchSuppliers(ctx, id(ctx), () =>
+      schemas.purchasingSupplierInput.parse(ctx.req.query),
+    ),
+  ),
+);
 purchasing.post(
   '/batches',
   ...write(

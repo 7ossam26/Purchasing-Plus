@@ -35,6 +35,7 @@ const include = {
   category: { select: { id: true, name: true } },
   creator: { select: { id: true, name: true } },
   approver: { select: { id: true, name: true } },
+  pauser: { select: { id: true, name: true } },
   copiedFrom: { select: { siteId: true } },
   events: {
     where: { type: 'RETURNED_FOR_EDIT' },

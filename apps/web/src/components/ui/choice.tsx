@@ -91,11 +91,13 @@ export function ToggleRow({
   description,
   checked,
   onChange,
+  disabled,
 }: {
   label: string;
   description?: string;
   checked: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <label className="flex min-h-target cursor-pointer items-center justify-between gap-3 rounded-control border border-seam bg-paper p-3">
@@ -111,6 +113,7 @@ export function ToggleRow({
           role="switch"
           className="peer sr-only"
           checked={checked}
+          disabled={disabled}
           onChange={(event) => onChange(event.currentTarget.checked)}
         />
         <span

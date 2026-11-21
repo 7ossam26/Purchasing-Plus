@@ -1,5 +1,6 @@
 import {
   ClipboardList,
+  ShoppingCart,
   Database,
   Folder,
   History,
@@ -14,6 +15,7 @@ import {
 
 const icons = {
   ClipboardList,
+  ShoppingCart,
   Database,
   Folder,
   History,

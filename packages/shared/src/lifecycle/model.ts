@@ -218,6 +218,7 @@ const closedStates = new Set<ItemState>([
   'CANCELLED',
   'REMOVED',
 ]);
-export const isClosed = (item: RequestItem) => closedStates.has(item.state);
+export const isClosed = (item: Pick<RequestItem, 'state'>) =>
+  closedStates.has(item.state);
 export const isFinal = (status: RequestStatus | DisplayedStage) =>
   status === 'COMPLETED' || status === 'REJECTED' || status === 'CANCELLED';

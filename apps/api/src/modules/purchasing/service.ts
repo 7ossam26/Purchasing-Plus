@@ -5,6 +5,7 @@ import {
   type editRfqMessageInput,
   type priceRequestItemInput,
   type editPausedRequestInput,
+  type purchasingSupplierInput,
 } from '@purchasing-plus/shared';
 import {
   pricingDraftAction,
@@ -20,7 +21,7 @@ import { hydrateLines, invalidLine } from '../requests/catalog.js';
 import { loadRequestInScope, reserveIds } from '../requests/repo.js';
 import { runTransition } from '../requests/service.js';
 
-import { toBatchDto, toPurchasingDto } from './dto.js';
+import { supplierDto, toBatchDto, toPurchasingDto } from './dto.js';
 import * as repo from './repo.js';
 
 export async function getPurchasing(
@@ -44,6 +45,16 @@ export async function getPurchasing(
     ? await repo.activeSuppliers(ctx.tx, { categoryId: row.categoryId })
     : [];
   return toPurchasingDto(row, batches, suppliers, itemIds, ctx.viewer);
+}
+export async function searchSuppliers(
+  ctx: Context,
+  id: number,
+  read: () => z.output<typeof purchasingSupplierInput>,
+) {
+  await loadRequestInScope(ctx.tx, id, ctx.viewer);
+  const { page, pageSize, q } = read();
+  const result = await repo.searchSuppliers(ctx.tx, page, pageSize, q);
+  return { ...result, items: result.items.map(supplierDto) };
 }
 
 export async function createBatch(

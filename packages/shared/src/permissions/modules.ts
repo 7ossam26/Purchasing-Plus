@@ -1,6 +1,7 @@
-import { masterData as copy, requestUi } from '../i18n/ar.js';
+import { masterData as copy, purchasingUi, requestUi } from '../i18n/ar.js';
 
 import type { PermissionKey } from './registry.js';
+import { purchasingKeys } from './registry.js';
 interface Module {
   id: string;
   label: string;
@@ -13,6 +14,15 @@ interface Module {
   children?: { path: string; anyOf: PermissionKey[] }[];
 }
 export const modules: Module[] = [
+  {
+    id: 'purchasing',
+    label: purchasingUi.title,
+    description: purchasingUi.description,
+    icon: 'ShoppingCart',
+    path: '/purchasing',
+    kind: 'operations',
+    anyOf: purchasingKeys,
+  },
   {
     id: 'requests',
     label: requestUi.title,

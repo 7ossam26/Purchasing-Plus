@@ -339,7 +339,12 @@ export async function getRequest(ctx: Context, id: number) {
 
 export async function options({ tx, viewer, req }: Context) {
   emptyInput.parse(req.query);
-  return repo.requestOptions(tx, viewer, allowed(viewer, 'requests.create'));
+  return repo.requestOptions(
+    tx,
+    viewer,
+    allowed(viewer, 'requests.create') ||
+      allowed(viewer, 'requests.editWhilePaused'),
+  );
 }
 
 export async function list(

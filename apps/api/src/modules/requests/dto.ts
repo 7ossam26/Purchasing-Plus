@@ -38,6 +38,7 @@ export function toRequestDto(row: RequestRecord, viewer: Viewer) {
     unitOrClient: state.unitOrClient,
     note: state.note,
     pausedById: state.pausedById,
+    pauser: row.pauser,
     pausedAt: state.pausedAt,
     pauseReason: state.pauseReason,
     approvedById: state.approvedById,

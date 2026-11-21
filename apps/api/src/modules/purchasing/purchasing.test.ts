@@ -272,6 +272,32 @@ async function version(r: Record) {
   return (await db.request.findUniqueOrThrow({ where: { id: r.id } })).version;
 }
 
+it('searches active suppliers across categories only for a pricing viewer within the request site', async () => {
+  const r = await atPurchasing(1);
+  const directory = pp(r, '/suppliers');
+  const { body } = await send(
+    'get',
+    directory + '?q=' + encodeURIComponent('إضاءة'),
+  ).expect(200);
+  expect(body).toMatchObject({
+    total: 1,
+    items: [
+      {
+        id: foreignSupplier,
+        name: 'إضاءة تاء',
+        whatsappNumber: '201201234567',
+        whatsappDisplay: expect.any(String),
+      },
+    ],
+  });
+  expect(
+    (await send('get', directory + '?q=2015').expect(200)).body.items,
+  ).toEqual([]);
+  await send('get', directory, undefined, reader).expect(403);
+  await send('get', directory, undefined, outsider).expect(404);
+  await send('get', directory + '?page=0').expect(422);
+});
+
 it('validates batch selections, tweaks messages and marks sent only once under a concurrent retry', async () => {
   const r = await atPurchasing(2);
   const itemIds = r.items.map((item) => item.id);
@@ -517,6 +543,7 @@ it('validates and clears line drafts, derives half-up prices and keeps the deliv
     total: '1.01',
     pendingTotal: '1.01',
     pricedCount: 1,
+    submitBlocker: null,
     unavailableCount: 0,
     needsRepricingItemIds: [],
   });
@@ -584,6 +611,7 @@ it('pauses, sets both independent edit flags, refuses stale prices and records p
   expect(paused).toMatchObject({
     status: 'PAUSED',
     pausedById: buyer.id,
+    pauser: { name: 'purchasing-buyer' },
     pauseReason: 'راجع المواصفات',
   });
   expect(

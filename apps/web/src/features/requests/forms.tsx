@@ -150,12 +150,14 @@ export function RequestFields({
   locked,
   onChange,
   expanded = false,
+  hideUrgency = false,
 }: {
   form: DraftForm;
   units: NamedRecord[];
   locked: boolean;
   onChange: (value: DraftForm) => void;
   expanded?: boolean;
+  hideUrgency?: boolean;
 }) {
   return (
     <div className="grid gap-4">
@@ -246,19 +248,21 @@ export function RequestFields({
         )}
       </section>
       <section className="grid gap-3 rounded-panel border border-seam bg-paper p-4">
-        <div className="grid gap-1">
-          <h3 className="text-small font-semibold">{copy.urgency}</h3>
-          {locked ? (
-            <p className="text-small">
-              {statusMap[form.urgency].label} · {copy.urgencyLocked}
-            </p>
-          ) : (
-            <UrgencyChoices
-              value={form.urgency}
-              onChange={(urgency) => onChange({ ...form, urgency })}
-            />
-          )}
-        </div>
+        {!hideUrgency && (
+          <div className="grid gap-1">
+            <h3 className="text-small font-semibold">{copy.urgency}</h3>
+            {locked ? (
+              <p className="text-small">
+                {statusMap[form.urgency].label} · {copy.urgencyLocked}
+              </p>
+            ) : (
+              <UrgencyChoices
+                value={form.urgency}
+                onChange={(urgency) => onChange({ ...form, urgency })}
+              />
+            )}
+          </div>
+        )}
         <Field label={copy.client}>
           {(props) => (
             <Input

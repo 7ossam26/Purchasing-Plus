@@ -214,6 +214,9 @@ const definitions = {
   ),
 };
 export type PermissionKey = keyof typeof definitions;
+export const purchasingKeys = (
+  Object.keys(definitions) as PermissionKey[]
+).filter((key) => key.startsWith('purchasing.'));
 export const registry = Object.entries(definitions).map(([key, value]) => ({
   key: key as PermissionKey,
   ...value,

@@ -27,6 +27,7 @@ export type RequestLine = Omit<
   supplierId?: number | null;
   supplierName?: string | null;
   lineTotal?: string | null;
+  unitPrice?: string | null;
   pricedQuantity?: string | null;
 };
 export type RequestDto = {
@@ -43,6 +44,9 @@ export type RequestDto = {
   unitOrClient: string | null;
   note: string | null;
   returnReason?: string;
+  pauser?: Named | null;
+  pausedAt?: string | null;
+  pauseReason?: string | null;
   deliveryFee?: string | null;
   site: Named;
   category: Named;
@@ -71,7 +75,16 @@ export type RequestEdit = {
   items?: RequestLineInput[];
 };
 export type RequestCommand =
-  'submit' | 'resubmit' | 'approve' | 'reject' | 'return' | 'urgency' | 'copy';
+  | 'submit'
+  | 'resubmit'
+  | 'approve'
+  | 'reject'
+  | 'return'
+  | 'urgency'
+  | 'copy'
+  | 'pause'
+  | 'resume'
+  | 'purchasing-return';
 const path = (id: number) => '/requests/' + id;
 export const requestKey = (id: number) => ['requests', 'detail', id] as const;
 export const timelineKey = (id: number) =>

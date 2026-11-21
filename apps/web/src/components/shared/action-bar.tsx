@@ -43,19 +43,21 @@ export function ActionBar({
   secondary = [],
   overflow = [],
   stickyOnDesktop = false,
+  sticky = true,
   fullWidthPrimary = false,
 }: {
   primary?: BarAction;
   secondary?: readonly BarAction[];
   overflow?: readonly BarAction[];
   stickyOnDesktop?: boolean;
+  sticky?: boolean;
   fullWidthPrimary?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   if (!primary && !secondary.length && !overflow.length) return null;
   return (
     <div
-      className={`sticky bottom-0 z-20 flex flex-wrap items-start gap-2 border-y border-seam bg-paper p-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:rounded-panel sm:border ${stickyOnDesktop ? '' : 'sm:static'}`}
+      className={`flex flex-wrap items-start gap-2 border-y border-seam bg-paper p-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:rounded-panel sm:border ${sticky ? `sticky bottom-0 z-20 ${stickyOnDesktop ? '' : 'sm:static'}` : ''}`}
     >
       {primary && (
         <Action

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { id, pathId } from './access.js';
+import { id, pagination, pathId } from './access.js';
 import { amount, quantity } from './lifecycle/model.js';
 import { requestVersion } from './request-inputs.js';
 
@@ -29,4 +29,7 @@ export const purchasingViewInput = z.strictObject({
     .transform((value) => (value ? value.split(',') : []))
     .pipe(z.array(pathId).max(250))
     .optional(),
+});
+export const purchasingSupplierInput = pagination.extend({
+  q: z.string().trim().max(100).optional(),
 });

@@ -1,7 +1,6 @@
-import { createSite } from '@purchasing-plus/shared';
-import { admin, ar } from '@purchasing-plus/shared/i18n/ar';
+import { admin } from '@purchasing-plus/shared/i18n/ar';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type SubmitEvent } from 'react';
+import { useState } from 'react';
 
 import { useCan, useSession } from '../../app/session.js';
 import {
@@ -16,11 +15,15 @@ import {
 import { RecordManager } from '../../components/shared/record-manager.js';
 import { Button } from '../../components/ui/button.js';
 import { useConfirm } from '../../components/ui/dialogs.js';
-import { Field, Input, Select, Textarea } from '../../components/ui/field.js';
-import { Modal } from '../../components/ui/modal.js';
+import { Field, Input, Select } from '../../components/ui/field.js';
 import { toast } from '../../components/ui/toast.js';
 import { ActiveStatus } from '../../features/admin/labels.js';
-import { siteApi, type Site } from '../../lib/api/sites.js';
+import { SiteDialog } from '../../features/admin/site-dialog.js';
+import {
+  invalidateSiteQueries,
+  siteApi,
+  type Site,
+} from '../../lib/api/sites.js';
 
 const copy = admin.siteManager;
 const columns: TableColumn<Site>[] = [
@@ -44,8 +47,6 @@ export function SitesPage() {
   const [active, setActive] = useState('');
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState<Site | 'new' | null>(null);
-  const [formKey, setFormKey] = useState(0);
-  const [saving, setSaving] = useState(false);
   const query = useQuery({
     queryKey: [
       'sites',
@@ -58,19 +59,13 @@ export function SitesPage() {
     ],
     queryFn: ({ signal }) => siteApi.list(page, search, active, signal),
   });
-  async function refresh() {
-    await Promise.all([
-      client.invalidateQueries({ queryKey: ['sites'] }),
-      client.invalidateQueries({ queryKey: ['users'] }),
-    ]);
-  }
   const deactivate = useMutation({
     mutationFn: siteApi.deactivate,
     onSuccess: async () => {
       toast.success(copy.deactivated);
       if (page > 1 && active === 'true' && query.data?.items.length === 1)
         setPage(page - 1);
-      await refresh();
+      await invalidateSiteQueries(client);
     },
   });
   async function deactivateSite(site: Site) {
@@ -179,121 +174,12 @@ export function SitesPage() {
           onPageChange={setPage}
         />
       )}
-      <Modal
-        open={modal === 'new' ? canAdd : Boolean(modal) && canEdit}
-        title={modal === 'new' ? copy.add : copy.edit}
-        dismissible={!saving}
-        onClose={() => setModal(null)}
-      >
-        <SiteForm
-          key={formKey}
-          site={modal === 'new' ? undefined : (modal ?? undefined)}
-          onBusy={setSaving}
-          onSaved={(another) => {
-            toast.success(copy.saved);
-            void refresh();
-            if (another) setFormKey((key) => key + 1);
-            else setModal(null);
-          }}
+      {modal && (modal === 'new' ? canAdd : canEdit) && (
+        <SiteDialog
+          site={modal === 'new' ? undefined : modal}
+          onClose={() => setModal(null)}
         />
-      </Modal>
+      )}
     </RecordManager>
-  );
-}
-
-function SiteForm({
-  site,
-  onBusy,
-  onSaved,
-}: {
-  site?: Site;
-  onBusy: (busy: boolean) => void;
-  onSaved: (another: boolean) => void;
-}) {
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [another, setAnother] = useState(false);
-  const mutation = useMutation({
-    mutationFn: (body: ReturnType<typeof createSite.parse>) =>
-      siteApi.save(body, site?.id),
-  });
-  async function save(event: SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (mutation.isPending) return;
-    const form = new FormData(event.currentTarget);
-    const result = createSite.safeParse({
-      name: form.get('name'),
-      address: form.get('address'),
-    });
-    if (!result.success) {
-      mutation.reset();
-      setErrors(
-        Object.fromEntries(
-          result.error.issues.map((issue) => [
-            String(issue.path[0]),
-            issue.path[0] === 'address' ? copy.invalidAddress : admin.validName,
-          ]),
-        ),
-      );
-      return;
-    }
-    setErrors({});
-    const addAnother =
-      (event.nativeEvent.submitter as HTMLButtonElement | null)?.value ===
-      'another';
-    setAnother(addAnother);
-    onBusy(true);
-    try {
-      await mutation.mutateAsync(result.data);
-      onSaved(addAnother);
-    } catch {
-      // The mutation error and recovery hint stay in the form.
-    } finally {
-      onBusy(false);
-    }
-  }
-  return (
-    <form
-      noValidate
-      onSubmit={(event) => void save(event)}
-      className="grid gap-4"
-    >
-      <Field label={admin.name} error={errors.name} required>
-        {(props) => (
-          <Input
-            {...props}
-            name="name"
-            defaultValue={site?.name}
-            data-initial-focus
-          />
-        )}
-      </Field>
-      <Field label={copy.address} error={errors.address}>
-        {(props) => (
-          <Textarea {...props} name="address" defaultValue={site?.address} />
-        )}
-      </Field>
-      <InlineError error={mutation.error} />
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="submit"
-          value="save"
-          disabled={mutation.isPending}
-          loading={mutation.isPending && !another}
-        >
-          {site ? admin.saveChanges : ar.common.save}
-        </Button>
-        {!site && (
-          <Button
-            type="submit"
-            value="another"
-            variant="secondary"
-            disabled={mutation.isPending}
-            loading={mutation.isPending && another}
-          >
-            {admin.saveAnother}
-          </Button>
-        )}
-      </div>
-    </form>
   );
 }

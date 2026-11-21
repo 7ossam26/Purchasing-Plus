@@ -1,4 +1,5 @@
 import type { createSite } from '@purchasing-plus/shared';
+import type { QueryClient } from '@tanstack/react-query';
 
 import { api } from './client.js';
 import { recordPath, type RecordPage } from './records.js';
@@ -23,3 +24,12 @@ export const siteApi = {
     }),
   deactivate: (id: number) => api<Site>('/sites/' + id, { method: 'DELETE' }),
 };
+
+export function invalidateSiteQueries(client: QueryClient) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: ['sites'] }),
+    client.invalidateQueries({ queryKey: ['users'] }),
+    client.invalidateQueries({ queryKey: ['requests', 'options'] }),
+    client.invalidateQueries({ queryKey: ['reports', 'options'] }),
+  ]);
+}

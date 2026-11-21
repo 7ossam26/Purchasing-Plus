@@ -1,7 +1,17 @@
-import { ar, liveUi as copy, requestUi } from '@purchasing-plus/shared/i18n/ar';
+import {
+  admin,
+  ar,
+  liveUi as copy,
+  requestUi,
+} from '@purchasing-plus/shared/i18n/ar';
 import { statusMap } from '@purchasing-plus/shared/lifecycle';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Inbox as InboxIcon, Plus } from 'lucide-react';
+import {
+  ChevronRight,
+  Inbox as InboxIcon,
+  MapPinPlus,
+  Plus,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
@@ -12,6 +22,7 @@ import { EmptyState, Skeleton } from '../../components/ui/states.js';
 import { Tabs } from '../../components/ui/tabs.js';
 import { inboxKey, liveApi, type InboxQueue } from '../../lib/api/live.js';
 import { settingsApi } from '../../lib/api/settings.js';
+import { SiteDialog } from '../admin/site-dialog.js';
 import { NewRequestDialog } from '../requests/new-request.js';
 import { RequestFacts } from '../requests/summary.js';
 import { requestHref } from '../requests/workspace.js';
@@ -81,6 +92,8 @@ function QueueRows({
 export function HomeInbox() {
   const { profile } = useSession();
   const canCreate = useCan('requests.create');
+  const canCreateSite = useCan('sites.create');
+  const [siteOpen, setSiteOpen] = useState(false);
   const canView = useCan('requests.view');
   const [create, setCreate] = useState(false);
   const [selection, setSelection] = useState('');
@@ -110,12 +123,20 @@ export function HomeInbox() {
         <h2 id="home-inbox" className="text-title sm:text-title-wide">
           {copy.inbox}
         </h2>
-        {canCreate && (
-          <Button onClick={() => setCreate(true)}>
-            <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
-            {requestUi.newRequest}
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canCreate && (
+            <Button onClick={() => setCreate(true)}>
+              <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
+              {requestUi.newRequest}
+            </Button>
+          )}
+          {canCreateSite && (
+            <Button variant="secondary" onClick={() => setSiteOpen(true)}>
+              <MapPinPlus size={20} strokeWidth={1.75} aria-hidden="true" />
+              {admin.siteManager.add}
+            </Button>
+          )}
+        </div>
       </header>
       <InlineError error={inbox.error} retry={() => void inbox.refetch()} />
       {canView && inbox.isPending ? (
@@ -142,6 +163,9 @@ export function HomeInbox() {
             <InboxEmpty />
           </div>
         )
+      )}
+      {siteOpen && canCreateSite && (
+        <SiteDialog onClose={() => setSiteOpen(false)} />
       )}
       {create && <NewRequestDialog onClose={() => setCreate(false)} />}
     </section>

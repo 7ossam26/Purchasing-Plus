@@ -2,7 +2,12 @@ import {
   recordDestinations,
   reportDestinations,
 } from '@purchasing-plus/shared';
-import { ar, reportsUi, uiPreview } from '@purchasing-plus/shared/i18n/ar';
+import {
+  admin,
+  ar,
+  reportsUi,
+  uiPreview,
+} from '@purchasing-plus/shared/i18n/ar';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
   cleanup,
@@ -10,6 +15,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -224,6 +230,40 @@ describe('session and protected routes', () => {
     expect(screen.getByRole('link', { name: /المستخدمون/ })).toBeTruthy();
     expect(screen.queryByText('الأدوار والصلاحيات')).toBeNull();
     expect(screen.queryByText('التكويدات')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: admin.siteManager.add }),
+    ).toBeNull();
+  });
+  it('creates a site directly from home with the create permission', async () => {
+    const { router, fetch } = setup('/', (path, request) => {
+      if (path.endsWith('/me'))
+        return json({ ...profile, permissions: ['sites.create'] });
+      if (path === '/api/v1/sites' && request?.method === 'POST')
+        return json(
+          { id: 2, name: uiPreview.exampleB, address: '', isActive: true },
+          201,
+        );
+      return json({ items: [] });
+    });
+    fireEvent.click(
+      await screen.findByRole('button', { name: admin.siteManager.add }),
+    );
+    const form = within(
+      screen.getByRole('dialog', { name: admin.siteManager.add }),
+    );
+    fireEvent.change(form.getByLabelText(admin.name), {
+      target: { value: uiPreview.exampleB },
+    });
+    fireEvent.click(form.getByRole('button', { name: ar.common.save }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/sites',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ name: uiPreview.exampleB, address: '' }),
+      }),
+    );
+    expect(router.state.location.pathname).toBe('/');
   });
   it('uses both the permission and site assignment in conditional controls', async () => {
     vi.stubGlobal(

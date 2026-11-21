@@ -69,6 +69,11 @@ export const quantity = amount.refine((value) => /[1-9]/.test(value));
 export function addQuantities(a: string, b: string) {
   return new Decimal(a).plus(b).toFixed(2);
 }
+export function sumAmounts(amounts: Iterable<string>) {
+  let total = new Decimal(0);
+  for (const amount of amounts) total = total.plus(amount);
+  return total.toFixed(2);
+}
 export const editableRequestFields = z.strictObject({
   urgency: z.enum(urgencies),
   unitOrClient: z.string().nullable(),

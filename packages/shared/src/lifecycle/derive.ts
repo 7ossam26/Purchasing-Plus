@@ -1,4 +1,5 @@
 import { cairoDay } from '../formatters.js';
+import type { PermissionKey } from '../permissions/registry.js';
 
 import {
   holds,
@@ -62,6 +63,37 @@ export const queueNames = [
   'paused',
 ] as const;
 export type Queue = (typeof queueNames)[number];
+export type PurchasingQueueRule = {
+  status: 'AT_PURCHASING' | 'FULFILMENT';
+  anyOf: readonly PermissionKey[];
+  items?: readonly ItemState[];
+  unsentOrder?: true;
+};
+export const purchasingQueueRules: readonly PurchasingQueueRule[] = [
+  {
+    status: 'AT_PURCHASING',
+    anyOf: [
+      'purchasing.price',
+      'purchasing.sendRfq',
+      'purchasing.returnForEdit',
+    ],
+  },
+  {
+    status: 'FULFILMENT',
+    items: ['UNAVAILABLE', 'OPEN'],
+    anyOf: ['purchasing.price'],
+  },
+  {
+    status: 'FULFILMENT',
+    items: ['REMAINING'],
+    anyOf: ['purchasing.handleRemaining'],
+  },
+  {
+    status: 'FULFILMENT',
+    unsentOrder: true,
+    anyOf: ['purchasing.sendSupplyOrder'],
+  },
+];
 export function inQueue(
   queue: Queue,
   state: RequestState,
@@ -99,19 +131,13 @@ export function inQueue(
         holds(viewer, 'receipt.record')
       );
     case 'purchasing':
-      if (state.status === 'AT_PURCHASING')
-        return (
-          holds(viewer, 'purchasing.price') ||
-          holds(viewer, 'purchasing.sendRfq') ||
-          holds(viewer, 'purchasing.returnForEdit')
-        );
-      return (
-        state.status === 'FULFILMENT' &&
-        (((has('UNAVAILABLE') || has('OPEN')) &&
-          holds(viewer, 'purchasing.price')) ||
-          (has('REMAINING') && holds(viewer, 'purchasing.handleRemaining')) ||
-          (state.supplyOrders.some((o) => !o.sent) &&
-            holds(viewer, 'purchasing.sendSupplyOrder')))
+      return purchasingQueueRules.some(
+        (rule) =>
+          rule.status === state.status &&
+          rule.anyOf.some((key) => holds(viewer, key)) &&
+          (!rule.items || rule.items.some(has)) &&
+          (!rule.unsentOrder ||
+            state.supplyOrders.some((order) => !order.sent)),
       );
   }
 }

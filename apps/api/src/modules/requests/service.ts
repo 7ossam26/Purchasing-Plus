@@ -35,6 +35,7 @@ import {
 import { AppError } from '../../middleware/errors.js';
 import type { Context } from '../access/endpoint.js';
 import { addItem, itemsByIds } from '../catalog/service.js';
+import { persistRounds } from '../purchasing/repo.js';
 
 import {
   forCopy,
@@ -52,6 +53,7 @@ const conflictCodes = new Set([
   'URGENCY_LOCKED',
   'MUST_RAISE',
   'NEEDS_REPRICING',
+  'NO_PRICED_ITEMS',
   'ROUND_NOT_PENDING',
   'NO_PENDING_SEND',
   'NOT_CLOSED',
@@ -129,6 +131,7 @@ export async function createDraft(
 type Prepared<A extends ActionName> = {
   command: ActionInput<A>;
   state?: RequestState;
+  persist?: () => Promise<unknown>;
 };
 type Command<A extends ActionName> = {
   available: (state: RequestState, viewer: Viewer | null) => Verdict;
@@ -152,26 +155,37 @@ export async function runTransition<
 >(
   ctx: Context,
   requestId: number,
-  name: A,
+  actionName: A | ((state: RequestState, input: I) => A),
   read: () => I,
   prepare: (
     state: RequestState,
     input: I,
   ) => Prepared<A> | Promise<Prepared<A>>,
+  replay?: (state: RequestState, input: I) => boolean,
 ) {
   const { tx, viewer, now } = ctx;
   const row = await repo.loadRequestInScope(tx, requestId, viewer, true);
   const previous = repo.toState(row);
   const input = read();
+  // Only an already recorded, non-mutating result can bypass the version check.
+  if (replay?.(previous, input)) return toRequestDto(row, viewer);
   if (input.version !== previous.version)
     throw appError(new LifecycleError('VERSION_CONFLICT'));
+  const name =
+    typeof actionName === 'function' ? actionName(previous, input) : actionName;
   const action = actions[name] as Command<A>;
   assertOk(action.available(previous, viewer));
   try {
-    const { command, state = previous } = await prepare(previous, input);
+    const {
+      command,
+      state = previous,
+      persist,
+    } = await prepare(previous, input);
     assertOk(action.can(state, viewer, command));
     const result = action.apply(state, viewer, command, now);
     await repo.updateRequest(tx, row, previous, result.next, now);
+    await persistRounds(tx, previous, result.next, viewer.userId, now);
+    await persist?.();
     if (result.copiedDraft)
       await repo.insertRequest(tx, result.copiedDraft, now);
     await appendEffects(ctx, result);
@@ -334,6 +348,7 @@ export async function list(
     page,
     pageSize,
     stage,
+    queue,
     q,
     from,
     to,
@@ -351,6 +366,7 @@ export async function list(
     ctx.viewer,
     {
       ...filters,
+      ...(queue ? repo.purchasingQueueWhere(ctx.viewer) : {}),
       displayedStage: stage,
       ...(q ? { number: { contains: q, mode: 'insensitive' } } : {}),
       createdAt: {

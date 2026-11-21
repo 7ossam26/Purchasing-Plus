@@ -129,11 +129,12 @@ export async function editSupplier(
 }
 
 export async function removeSupplier(ctx: Context, id: number) {
-  if (await repo.supplierPriceCount(ctx.tx, id))
+  const { _count } = await repo.supplierReferences(ctx.tx, id);
+  if (Object.values(_count).some(Boolean))
     throw new AppError(
       409,
       'SUPPLIER_IN_USE',
-      'المورد مرتبط بسجل أسعار',
+      'المورد مرتبط بطلبات أو بسجل أسعار',
       'أوقف المورد بدلًا من حذفه.',
     );
   const before = toDto(await repo.deleteSupplier(ctx.tx, id));

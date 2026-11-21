@@ -15,6 +15,7 @@ import {
   amount,
   outstanding,
   quantity,
+  sumAmounts,
   unitPrice,
   type ItemState,
   type RequestItem,
@@ -43,7 +44,42 @@ const remaining = {
   statuses: fulfilment,
   ready: hasItems('REMAINING'),
 } as const;
-const price = { supplierId: id, lineTotal: amount };
+const price = { supplierId: id, lineTotal: quantity };
+const rfq = { key: 'purchasing.sendRfq', statuses: ['AT_PURCHASING'] } as const;
+const pendingRfq = {
+  ...rfq,
+  ready: (state: RequestState) =>
+    state.batches.some(
+      (batch) => batch.supplierIds.length > batch.sentTo.length,
+    )
+      ? undefined
+      : 'NO_PENDING_SEND',
+} as const;
+
+function pendingBatch(
+  state: RequestState,
+  batchId: number,
+  supplierId: number,
+) {
+  const batch = state.batches.find((batch) => batch.id === batchId);
+  if (
+    !batch ||
+    !batch.supplierIds.includes(supplierId) ||
+    batch.sentTo.includes(supplierId)
+  )
+    refuse('NO_PENDING_SEND');
+  return batch;
+}
+
+export function wasBatchSent(
+  state: RequestState,
+  batchId: number,
+  supplierId: number,
+) {
+  return state.batches.some(
+    (batch) => batch.id === batchId && batch.sentTo.includes(supplierId),
+  );
+}
 export const createBatch = action(
   command({
     batchId: id,
@@ -51,8 +87,7 @@ export const createBatch = action(
     supplierIds: z.array(id).min(1),
   }),
   {
-    key: 'purchasing.sendRfq',
-    statuses: ['AT_PURCHASING'],
+    ...rfq,
     ready: hasItems('OPEN', 'UNAVAILABLE'),
   },
   (ctx, i) => {
@@ -77,28 +112,22 @@ export const createBatch = action(
 );
 export const markBatchSent = action(
   command({ batchId: id, supplierId: id }),
-  {
-    key: 'purchasing.sendRfq',
-    statuses: ['AT_PURCHASING'],
-    ready: (s) =>
-      s.batches.some((b) => b.supplierIds.length > b.sentTo.length)
-        ? undefined
-        : 'NO_PENDING_SEND',
-  },
+  pendingRfq,
   (ctx, i) => {
-    const batch = ctx.state.batches.find((b) => b.id === i.batchId);
-    if (
-      !batch ||
-      !batch.supplierIds.includes(i.supplierId) ||
-      batch.sentTo.includes(i.supplierId)
-    )
-      refuse('NO_PENDING_SEND');
+    const batch = pendingBatch(ctx.state, i.batchId, i.supplierId);
     batch.sentTo.push(i.supplierId);
     ctx.emit(
       'BATCH_SENT_MARKED',
       { batchId: batch.id, supplierId: i.supplierId },
       batch.itemIds,
     );
+  },
+);
+export const editBatchMessage = action(
+  command({ batchId: id, supplierId: id, message: z.string().trim().min(1) }),
+  pendingRfq,
+  (ctx, input) => {
+    pendingBatch(ctx.state, input.batchId, input.supplierId);
   },
 );
 function checkCatalogUnitPrice(
@@ -127,7 +156,7 @@ export const savePricingDraft = action(
   command({
     itemId: id,
     supplierId: id.nullable(),
-    lineTotal: amount.nullable(),
+    lineTotal: quantity.nullable(),
   }),
   { ...pricing, ready: hasItems('OPEN') },
   (ctx, i) =>
@@ -173,12 +202,25 @@ export const priceUnavailable = action(
     setDraft(item, i.supplierId, i.lineTotal);
   },
 );
-const isPriced = (i: RequestItem) =>
+export function pricingDraftAction(
+  state: RequestState,
+  itemId: number,
+  hasPrice: boolean,
+) {
+  return hasPrice &&
+    state.status === 'FULFILMENT' &&
+    state.items.some(
+      (item) => item.id === itemId && item.state === 'UNAVAILABLE',
+    )
+    ? 'priceUnavailable'
+    : 'savePricingDraft';
+}
+export const isPricingCandidate = (i: RequestItem) =>
   i.state === 'OPEN' && i.supplierId !== null && i.lineTotal !== null;
 function pricingReady(s: RequestState) {
   if (s.items.some((i) => i.state === 'OPEN' && i.needsRepricing))
     return 'NEEDS_REPRICING';
-  return s.items.some(isPriced) ? undefined : 'NO_PRICED_ITEMS';
+  return s.items.some(isPricingCandidate) ? undefined : 'NO_PRICED_ITEMS';
 }
 const priceLine = (item: RequestItem): RoundLine => ({
   itemId: item.id,
@@ -193,7 +235,7 @@ export const submitPricing = action(
   { ...pricing, ready: pricingReady, hint: 'primary' },
   (ctx) => {
     const s = ctx.state,
-      items = s.items.filter(isPriced);
+      items = s.items.filter(isPricingCandidate);
     const lines = items.map(priceLine);
     const roundNo = (s.rounds.at(-1)?.number ?? 0) + 1;
     s.rounds.push({
@@ -207,9 +249,7 @@ export const submitPricing = action(
       i.state = 'AWAITING_APPROVAL';
     });
     s.status = 'FULFILMENT';
-    const roundTotal = lines
-      .reduce((sum, l) => sum.plus(l.lineTotal), new Decimal(0))
-      .toFixed(2);
+    const roundTotal = sumAmounts(lines.map((line) => line.lineTotal));
     ctx.emit(
       'PRICING_SUBMITTED',
       { roundNo, items: lines, roundTotal, deliveryFee: s.deliveryFee },

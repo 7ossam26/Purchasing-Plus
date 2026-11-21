@@ -7,6 +7,8 @@ import { Router } from 'express';
 import type { z } from 'zod';
 
 import { endpoint, type Context } from '../access/endpoint.js';
+import { purchasing } from '../purchasing/routes.js';
+import { editPaused } from '../purchasing/service.js';
 
 import * as schemas from './schemas.js';
 import * as service from './service.js';
@@ -18,6 +20,7 @@ const read = (
   handler: (ctx: Context) => Promise<unknown>,
 ) => endpoint(keys, handler);
 requests.get('/options', ...read(['requests.view'], service.options));
+requests.use('/:id/purchasing', purchasing);
 const write = (
   key: PermissionKey,
   handler: (ctx: Context) => Promise<unknown>,
@@ -65,6 +68,30 @@ requests.get(
   '/:id/timeline',
   ...read(['requests.viewTimeline'], (ctx) =>
     service.getTimeline(ctx, id(ctx)),
+  ),
+);
+requests.post(
+  '/:id/pause',
+  ...command('pause', 'requests.pause', schemas.requestReasonInput),
+);
+requests.post(
+  '/:id/resume',
+  ...command('resume', 'requests.pause', schemas.requestVersion),
+);
+requests.post(
+  '/:id/purchasing-return',
+  ...command(
+    'purchasingReturnForEdit',
+    'purchasing.returnForEdit',
+    schemas.requestReasonInput,
+  ),
+);
+requests.patch(
+  '/:id/paused-edit',
+  ...write('requests.editWhilePaused', (ctx) =>
+    editPaused(ctx, id(ctx), () =>
+      schemas.editPausedRequestInput.parse(ctx.req.body),
+    ),
   ),
 );
 requests.post(

@@ -20,6 +20,7 @@ export const actions = {
   purchasingReturnForEdit: request.purchasingReturnForEdit,
   createBatch: buying.createBatch,
   markBatchSent: buying.markBatchSent,
+  editBatchMessage: buying.editBatchMessage,
   savePricingDraft: buying.savePricingDraft,
   markUnavailable: buying.markUnavailable,
   markAvailable: buying.markAvailable,
@@ -38,7 +39,10 @@ export const actions = {
   autoComplete: request.autoComplete,
 } as const;
 export type ActionName = keyof typeof actions;
-export const { can: canAddToCatalog, apply: applyAddToCatalog } = actions.addToCatalog;
+export const { can: canAddToCatalog, apply: applyAddToCatalog } =
+  actions.addToCatalog;
+export const { can: canEditBatchMessage, apply: applyEditBatchMessage } =
+  actions.editBatchMessage;
 export type ActionInput<A extends ActionName> = Parameters<
   (typeof actions)[A]['apply']
 >[2];

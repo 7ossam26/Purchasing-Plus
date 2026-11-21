@@ -1,4 +1,9 @@
 export const ar = {
+  purchasing: {
+    invalidSelection: 'اختار بنود من الطلب ده.',
+    categorySuppliers: 'اختار موردين نشطين من فئة الطلب.',
+    activeSupplier: 'اختار مورد نشط للتسعير.',
+  },
   lifecycle: {
     errors: {
       FORBIDDEN: 'معندكش صلاحية للإجراء ده.',

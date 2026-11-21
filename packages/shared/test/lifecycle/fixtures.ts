@@ -157,6 +157,11 @@ export const cases = {
     statuses: ['AT_PURCHASING'],
     input: { ...base, batchId: 3, supplierId: 8 },
   },
+  editBatchMessage: {
+    key: 'purchasing.sendRfq',
+    statuses: ['AT_PURCHASING'],
+    input: { ...base, batchId: 3, supplierId: 8, message: 'تأكيد المواصفات' },
+  },
   savePricingDraft: {
     key: 'purchasing.price',
     statuses: pricing,
@@ -260,7 +265,7 @@ export function sample(name: ActionName) {
     lineTotal: '13.50',
     pricedQuantity: '4.00',
   });
-  if (name === 'markBatchSent')
+  if (name === 'markBatchSent' || name === 'editBatchMessage')
     s.batches.push({ id: 3, itemIds: [11], supplierIds: [8], sentTo: [] });
   if (name === 'approvePricing' || name === 'rejectPricing')
     s.rounds.push({

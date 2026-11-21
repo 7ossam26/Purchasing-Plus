@@ -18,16 +18,19 @@ const header = z.strictObject({
 export const createRequestInput = header.extend({ categoryId: id });
 
 const itemFields = { id: id.optional(), specs: z.string().max(4000), quantity };
-const line = z.union([
-  z.strictObject({ ...itemFields, catalogItemId: id, unitId: id.optional() }),
-  z.strictObject({
-    ...itemFields,
-    catalogItemId: z.null().optional(),
-    nodeId: id,
-    unitId: id,
-    otherName: z.string().trim().min(1).max(200),
-  }),
-]);
+const catalogLine = z.strictObject({
+  ...itemFields,
+  catalogItemId: id,
+  unitId: id.optional(),
+});
+const otherLine = z.strictObject({
+  ...itemFields,
+  catalogItemId: z.null().optional(),
+  nodeId: id,
+  unitId: id,
+  otherName: z.string().trim().min(1).max(200),
+});
+const line = z.union([catalogLine, otherLine]);
 const items = z.array(line).max(250);
 export type RequestLineInput = z.infer<typeof line>;
 
@@ -40,6 +43,28 @@ export const saveDraftInput = header
 export const editRequestInput = saveDraftInput
   .omit({ siteId: true })
   .partial({ items: true });
+export const editPausedRequestInput = requestVersion.extend({
+  fields: header.omit({ siteId: true }).partial().optional(),
+  add: z
+    .array(
+      z.union([catalogLine.omit({ id: true }), otherLine.omit({ id: true })]),
+    )
+    .max(250)
+    .optional(),
+  remove: z.array(id).max(250).optional(),
+  change: z
+    .array(
+      z.strictObject({
+        itemId: id,
+        fields: otherLine
+          .omit({ id: true })
+          .partial()
+          .extend({ catalogItemId: id.nullable().optional() }),
+      }),
+    )
+    .max(250)
+    .optional(),
+});
 export const deleteDraftInput = requestVersion.extend({
   confirm: z.literal(true),
 });
@@ -66,6 +91,7 @@ export const addRequestItemToCatalogInput = createCatalogItem
 
 const time = z.union([z.iso.datetime({ offset: true }), z.iso.date()]);
 export const requestListInput = pagination.extend({
+  queue: z.literal('purchasing').optional(),
   status: z.enum(requestStatuses).optional(),
   stage: z.enum(displayedStages).optional(),
   siteId: pathId.optional(),

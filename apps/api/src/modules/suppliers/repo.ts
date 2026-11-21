@@ -78,8 +78,20 @@ export async function updateSupplier(
   return tx.supplier.update({ where: { id }, data, include: withCategories });
 }
 
-export function supplierPriceCount(tx: Tx, supplierId: number) {
-  return tx.catalogItemPrice.count({ where: { supplierId } });
+export function supplierReferences(tx: Tx, id: number) {
+  return tx.supplier.findUniqueOrThrow({
+    where: { id },
+    select: {
+      _count: {
+        select: {
+          prices: true,
+          requestItems: true,
+          rfqBatches: true,
+          roundLines: true,
+        },
+      },
+    },
+  });
 }
 
 export function deleteSupplier(tx: Tx, id: number) {

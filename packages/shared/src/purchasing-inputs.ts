@@ -1,0 +1,32 @@
+import { z } from 'zod';
+
+import { id, pathId } from './access.js';
+import { amount, quantity } from './lifecycle/model.js';
+import { requestVersion } from './request-inputs.js';
+
+const ids = z.array(id).min(1).max(250);
+const message = z.string().trim().min(1).max(65536);
+export const createRfqInput = requestVersion.extend({
+  itemIds: ids,
+  supplierIds: ids,
+  message,
+});
+export const editRfqMessageInput = requestVersion.extend({ message });
+export const priceRequestItemInput = z.union([
+  requestVersion.extend({ supplierId: id, lineTotal: quantity }),
+  requestVersion.extend({ supplierId: z.null(), lineTotal: z.null() }),
+]);
+export const itemAvailabilityInput = requestVersion.extend({
+  note: z.string().trim().max(4000).optional(),
+});
+export const deliveryFeeInput = requestVersion.extend({
+  deliveryFee: amount.nullable(),
+});
+export const purchasingViewInput = z.strictObject({
+  itemIds: z
+    .string()
+    .max(3000)
+    .transform((value) => (value ? value.split(',') : []))
+    .pipe(z.array(pathId).max(250))
+    .optional(),
+});

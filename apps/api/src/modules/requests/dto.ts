@@ -5,6 +5,7 @@ import {
   inSite,
   isFinal,
   stateCounts,
+  unitPrice,
 } from '@purchasing-plus/shared/lifecycle';
 
 import { allowed, type Viewer } from '../../middleware/access.js';
@@ -50,7 +51,16 @@ export function toRequestDto(row: RequestRecord, viewer: Viewer) {
       .map(({ supplierId, lineTotal, pricedQuantity, ...item }) => ({
         ...item,
         isOther: item.catalogItemId === null,
-        ...(prices ? { lineTotal, pricedQuantity } : {}),
+        ...(prices
+          ? {
+              lineTotal,
+              pricedQuantity,
+              unitPrice:
+                lineTotal === null
+                  ? null
+                  : unitPrice(lineTotal, pricedQuantity ?? item.quantity),
+            }
+          : {}),
         ...(supplierNames
           ? { supplierId, supplierName: supplierNames.get(item.id) }
           : {}),

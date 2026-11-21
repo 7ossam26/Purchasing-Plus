@@ -4,6 +4,7 @@ export {
   createRequestInput,
   deleteDraftInput,
   editRequestInput,
+  editPausedRequestInput,
   recentRequestItemsInput,
   requestListInput,
   requestQuantitiesInput,

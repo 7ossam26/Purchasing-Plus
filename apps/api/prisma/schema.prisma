@@ -84,8 +84,8 @@ model Request {
   copiedFromId   Int?
   copiedFrom     Request?       @relation("RequestCopies", fields: [copiedFromId], references: [id], onDelete: SetNull)
   copies         Request[]      @relation("RequestCopies")
-  rounds         Json           @default("[]")
-  batches        Json           @default("[]")
+  rounds         PricingRound[]
+  batches        RfqBatch[]
   supplyOrders   Json           @default("[]")
   items          RequestItem[]
   events         RequestEvent[]
@@ -99,34 +99,115 @@ model Request {
 }
 
 model RequestItem {
-  id                Int              @id @default(autoincrement())
+  id                Int                @id @default(autoincrement())
   requestId         Int
-  request           Request          @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  request           Request            @relation(fields: [requestId], references: [id], onDelete: Cascade)
   lineNo            Int
   catalogItemId     Int?
-  catalogItem       CatalogItem?     @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
+  catalogItem       CatalogItem?       @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
   nodeId            Int
-  node              CatalogNode      @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+  node              CatalogNode        @relation(fields: [nodeId], references: [id], onDelete: Restrict)
   snapshot          Json
   specs             String
-  quantity          Decimal          @db.Decimal(14, 2)
+  quantity          Decimal            @db.Decimal(14, 2)
   unitId            Int
-  unit              Unit             @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  unit              Unit               @relation(fields: [unitId], references: [id], onDelete: Restrict)
   otherName         String?
   state             RequestItemState
-  receivedQty       Decimal          @db.Decimal(14, 2)
+  receivedQty       Decimal            @db.Decimal(14, 2)
   supplierId        Int?
-  supplier          Supplier?        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  lineTotal         Decimal?         @db.Decimal(14, 2)
-  pricedQuantity    Decimal?         @db.Decimal(14, 2)
+  supplier          Supplier?          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lineTotal         Decimal?           @db.Decimal(14, 2)
+  pricedQuantity    Decimal?           @db.Decimal(14, 2)
   unavailableNote   String?
   needsRepricing    Boolean
   modifiedAfterSend Boolean
   pickedAt          DateTime
+  rfqLines          RfqBatchItem[]
+  roundLines        PricingRoundItem[]
 
   @@unique([requestId, lineNo])
   @@index([catalogItemId, pickedAt])
   @@index([nodeId])
+}
+
+enum PricingRoundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model RfqBatch {
+  id          Int                @id @default(autoincrement())
+  requestId   Int
+  request     Request            @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now())
+  createdById Int
+  creator     User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  message     String
+  items       RfqBatchItem[]
+  suppliers   RfqBatchSupplier[]
+
+  @@index([requestId, id])
+}
+
+model RfqBatchItem {
+  batchId Int
+  batch   RfqBatch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  itemId  Int
+  item    RequestItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@id([batchId, itemId])
+  @@index([itemId])
+}
+
+model RfqBatchSupplier {
+  batchId    Int
+  batch      RfqBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  supplierId Int
+  supplier   Supplier  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  message    String
+  sentAt     DateTime?
+  sentById   Int?
+  sender     User?     @relation(fields: [sentById], references: [id], onDelete: Restrict)
+
+  @@id([batchId, supplierId])
+  @@index([supplierId])
+}
+
+model PricingRound {
+  id            Int                @id @default(autoincrement())
+  requestId     Int
+  request       Request            @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  number        Int
+  status        PricingRoundStatus
+  submittedAt   DateTime
+  submittedById Int
+  submitter     User               @relation("PricingSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  decidedAt     DateTime?
+  decidedById   Int?
+  decider       User?              @relation("PricingDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  deliveryFee   Decimal?           @db.Decimal(14, 2)
+  items         PricingRoundItem[]
+
+  @@unique([requestId, number])
+}
+
+model PricingRoundItem {
+  roundId       Int
+  round         PricingRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  itemId        Int
+  item          RequestItem  @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  lineNo        Int
+  catalogItemId Int?
+  supplierId    Int
+  supplier      Supplier     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lineTotal     Decimal      @db.Decimal(14, 2)
+  quantity      Decimal      @db.Decimal(14, 2)
+
+  @@id([roundId, itemId])
+  @@index([itemId])
+  @@index([supplierId])
 }
 
 model RequestNumberSequence {
@@ -175,27 +256,31 @@ enum SiteScope {
 }
 
 model User {
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  id             Int            @id @default(autoincrement())
-  name           String
-  username       String         @unique
-  passwordHash   String
-  isSuperadmin   Boolean        @default(false)
-  isActive       Boolean        @default(true)
-  failedAttempts Int            @default(0)
-  lockedUntil    DateTime?
-  lastLoginAt    DateTime?
-  roleId         Int?
-  role           Role?          @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  sites          UserSite[]
-  sessions       Session[]
-  audits         AuditLog[]
-  requests       Request[]      @relation("RequestCreator")
-  approved       Request[]      @relation("RequestApprover")
-  paused         Request[]      @relation("RequestPauser")
-  requestEvents  RequestEvent[]
-  notifications  Notification[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  id               Int                @id @default(autoincrement())
+  name             String
+  username         String             @unique
+  passwordHash     String
+  isSuperadmin     Boolean            @default(false)
+  isActive         Boolean            @default(true)
+  failedAttempts   Int                @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  roleId           Int?
+  role             Role?              @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  sites            UserSite[]
+  sessions         Session[]
+  audits           AuditLog[]
+  requests         Request[]          @relation("RequestCreator")
+  approved         Request[]          @relation("RequestApprover")
+  paused           Request[]          @relation("RequestPauser")
+  requestEvents    RequestEvent[]
+  notifications    Notification[]
+  rfqBatches       RfqBatch[]
+  rfqSent          RfqBatchSupplier[]
+  pricingSubmitted PricingRound[]     @relation("PricingSubmitter")
+  pricingDecided   PricingRound[]     @relation("PricingDecider")
 
   @@index([roleId])
   @@index([isActive, id])
@@ -437,6 +522,8 @@ model Supplier {
   categories     SupplierCategory[]
   prices         CatalogItemPrice[]
   requestItems   RequestItem[]
+  rfqBatches     RfqBatchSupplier[]
+  roundLines     PricingRoundItem[]
 
   @@index([isActive, name, id])
   @@index([name, id])

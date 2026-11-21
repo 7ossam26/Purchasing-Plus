@@ -5,6 +5,7 @@ import { cairoYear } from '@purchasing-plus/shared';
 import {
   deriveStage,
   matchesRecipient,
+  purchasingQueueRules,
   snapshot,
   type EventDraft,
   type NotifyIntent,
@@ -12,11 +13,19 @@ import {
 } from '@purchasing-plus/shared/lifecycle';
 import { isPermissionKey } from '@purchasing-plus/shared/permissions';
 
-import { missing, siteWhere, type Viewer } from '../../middleware/access.js';
+import {
+  allowed,
+  missing,
+  siteWhere,
+  type Viewer,
+} from '../../middleware/access.js';
 import type { Tx } from '../access/repo.js';
 import { visiblePath } from '../catalog-tree/repo.js';
+import { batchSummary, roundState } from '../purchasing/repo.js';
 
 const include = {
+  batches: batchSummary,
+  rounds: roundState,
   items: {
     omit: { requestId: true, pickedAt: true, supplierId: true },
     include: { supplier: { select: { id: true, name: true } } },
@@ -103,8 +112,21 @@ export function toState(row: RequestRecord): RequestState {
     approvedById,
     copiedFromId,
     deleted: false,
-    rounds: rounds as unknown as RequestState['rounds'],
-    batches: batches as unknown as RequestState['batches'],
+    rounds: rounds.map(({ items, ...round }) => ({
+      ...round,
+      decidedAt: round.decidedAt?.toISOString() ?? null,
+      lines: items.map((line) => ({
+        ...line,
+        lineTotal: line.lineTotal.toFixed(2),
+        quantity: line.quantity.toFixed(2),
+      })),
+    })),
+    batches: batches.map((batch) => ({
+      id: batch.id,
+      itemIds: batch.items.map((line) => line.itemId),
+      supplierIds: batch.suppliers.map((s) => s.supplierId),
+      sentTo: batch.suppliers.flatMap((s) => (s.sentAt ? [s.supplierId] : [])),
+    })),
     supplyOrders: supplyOrders as unknown as RequestState['supplyOrders'],
     items: items.map(
       ({
@@ -176,7 +198,7 @@ export function findLineUnits(tx: Tx, ids: number[]) {
 
 export async function reserveIds(
   tx: Tx,
-  table: 'Request' | 'RequestItem',
+  table: 'Request' | 'RequestItem' | 'RfqBatch',
   count: number,
 ) {
   if (!count) return [];
@@ -216,8 +238,6 @@ function requestData(state: RequestState, now: Date, previous?: RequestRecord) {
     pauseReason,
     approvedById,
     copiedFromId,
-    rounds,
-    batches,
     supplyOrders,
   } = state;
   const displayedStage = deriveStage(state);
@@ -240,11 +260,6 @@ function requestData(state: RequestState, now: Date, previous?: RequestRecord) {
     pauseReason,
     approvedById,
     copiedFromId,
-    rounds: rounds.map((round) => ({
-      ...round,
-      lines: round.lines.map((line) => ({ ...line })),
-    })),
-    batches: batches.map((batch) => ({ ...batch })),
     supplyOrders: supplyOrders.map((order) => ({
       ...order,
       lines: order.lines.map((line) => ({ ...line })),
@@ -406,6 +421,21 @@ export async function appendNotifications(
         createdAt: now,
       })),
     });
+}
+
+export function purchasingQueueWhere(viewer: Viewer): Prisma.RequestWhereInput {
+  const branches = purchasingQueueRules
+    .filter((rule) => rule.anyOf.some((key) => allowed(viewer, key)))
+    .map((rule) => ({
+      status: rule.status,
+      ...(rule.items
+        ? { items: { some: { state: { in: [...rule.items] } } } }
+        : {}),
+      ...(rule.unsentOrder
+        ? { supplyOrders: { array_contains: [{ sent: false }] } }
+        : {}),
+    }));
+  return branches.length ? { OR: branches } : { id: { in: [] } };
 }
 
 export async function listRequests(

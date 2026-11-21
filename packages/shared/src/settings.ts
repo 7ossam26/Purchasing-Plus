@@ -34,11 +34,12 @@ export const defaultSettings: Settings = {
   agingDays: 3,
 };
 
-export function renderMessageTemplate(
+export function renderTemplate(
   template: string,
-  values: Record<TemplateKey, string>,
+  values: Partial<Record<TemplateKey, string>>,
 ) {
   return template.replace(placeholder, (token, key: string) =>
-    allowed.has(key) ? values[key as TemplateKey] : token,
+    allowed.has(key) ? (values[key as TemplateKey] ?? token) : token,
   );
 }
+export const renderMessageTemplate = renderTemplate;

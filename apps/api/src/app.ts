@@ -74,7 +74,7 @@ export function createApp({
           styleSrc: ["'self'"],
           fontSrc: ["'self'"],
           scriptSrc: ["'self'"],
-          imgSrc: imageOrigin ? ["'self'", imageOrigin] : ["'self'"],
+          imgSrc: ["'self'", 'blob:', ...(imageOrigin ? [imageOrigin] : [])],
         },
       },
     }),

@@ -23,7 +23,12 @@ import { axe } from 'vitest-axe';
 import { createQueryClient } from '../../app/query.js';
 import { AppProviders, routes } from '../../app/routes.js';
 import type { SessionProfile } from '../../lib/api/auth.js';
-import type { Attribute, CatalogItem, Folder } from '../../lib/api/catalog.js';
+import type {
+  Attribute,
+  CatalogImage,
+  CatalogItem,
+  Folder,
+} from '../../lib/api/catalog.js';
 
 import { Explorer } from './Explorer.js';
 
@@ -88,6 +93,27 @@ const item: CatalogItem = {
   isActive: true,
   attributeValues: [],
 };
+const catalogPhoto: CatalogImage = {
+  id: 1,
+  width: 900,
+  height: 600,
+  order: 0,
+  isCover: true,
+  thumbUrl: '/media/thumb',
+  displayUrl: '/media/full',
+  crop: null,
+};
+
+async function loadCropPreview(dialog: HTMLElement) {
+  await waitFor(() => expect(dialog.querySelector('img')).not.toBeNull());
+  const photo = dialog.querySelector('img')!;
+  Object.defineProperties(photo, {
+    naturalWidth: { value: 900 },
+    naturalHeight: { value: 600 },
+  });
+  fireEvent.load(photo);
+  return within(dialog).getByRole('group', { name: imageCopy.cropArea });
+}
 const page = <Row,>(items: Row[]) => ({
   items,
   page: 1,
@@ -171,6 +197,137 @@ function setup(
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it('edits the framing of an existing photo without changing its full image', async () => {
+  let current = { ...item, images: [catalogPhoto] };
+  const recordCrop = vi.fn();
+  setup(
+    '/catalog/item/11/edit',
+    [...catalogRead, 'catalog.edit'],
+    (path, init) => {
+      if (
+        path === '/catalog/items/11/images/1/crop' &&
+        init?.method === 'PATCH'
+      ) {
+        const { crop } = JSON.parse(String(init.body));
+        recordCrop(crop);
+        current = { ...current, images: [{ ...catalogPhoto, crop }] };
+        return Response.json(current.images);
+      }
+      return path === '/catalog/items/11'
+        ? Response.json(current)
+        : fixtures(path, init);
+    },
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: imageCopy.editCrop }),
+  );
+  const dialog = screen.getByRole('dialog', { name: imageCopy.cropTitle });
+  const frame = await loadCropPreview(dialog);
+  fireEvent.keyDown(frame, { key: 'ArrowLeft' });
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: imageCopy.cropSave }),
+  );
+  await waitFor(() => expect(dialog.isConnected).toBe(false));
+  expect(recordCrop).toHaveBeenCalledWith({ x: 165, y: 0, size: 600 });
+  expect(screen.getByRole('img', { name: item.name }).getAttribute('src')).toBe(
+    catalogPhoto.displayUrl,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: imageCopy.editCrop }));
+  const reopened = screen.getByRole('dialog', { name: imageCopy.cropTitle });
+  await loadCropPreview(reopened);
+  fireEvent.change(within(reopened).getByRole('slider'), {
+    target: { value: '40' },
+  });
+  fireEvent.click(
+    within(reopened).getByRole('button', { name: imageCopy.cropReset }),
+  );
+  fireEvent.click(
+    within(reopened).getByRole('button', { name: imageCopy.cropSave }),
+  );
+  await waitFor(() => expect(reopened.isConnected).toBe(false));
+  expect(recordCrop).toHaveBeenLastCalledWith(null);
+  expect(
+    window.dispatchEvent(new Event('beforeunload', { cancelable: true })),
+  ).toBe(true);
+});
+
+it('previews uploads in order, skips the first file, and sends only the approved crop', async () => {
+  const previews = vi.fn();
+  const uploads = vi.fn();
+  const originalUrl = URL;
+  const revoke = vi.fn();
+  vi.stubGlobal(
+    'URL',
+    class extends originalUrl {
+      static createObjectURL = () => 'blob:crop-preview';
+      static revokeObjectURL = revoke;
+    },
+  );
+  vi.stubGlobal(
+    'XMLHttpRequest',
+    class {
+      upload = {};
+      status = 201;
+      response = [catalogPhoto];
+      onload?: () => void;
+      open() {}
+      send(body: FormData) {
+        uploads(body);
+        this.onload?.();
+      }
+    },
+  );
+  setup(
+    '/catalog/item/11/edit',
+    [...catalogRead, 'catalog.edit'],
+    (path, init) => {
+      if (
+        path === '/catalog/items/11/images/preview' &&
+        init?.method === 'POST'
+      ) {
+        previews((init.body as FormData).get('file'));
+        return new Response('preview', {
+          headers: { 'Content-Type': 'image/webp' },
+        });
+      }
+      return fixtures(path, init);
+    },
+  );
+  const first = new File(['first'], 'first.heic');
+  const second = new File(['second'], 'second.png');
+  const input = await screen.findByLabelText(imageCopy.add);
+  fireEvent.change(input, { target: { files: [first, second] } });
+  const firstDialog = screen.getByRole('dialog', { name: imageCopy.cropTitle });
+  await loadCropPreview(firstDialog);
+  fireEvent.click(
+    within(firstDialog).getByRole('button', { name: imageCopy.cropSkip }),
+  );
+  expect(uploads).not.toHaveBeenCalled();
+  const secondDialog = screen.getByRole('dialog', {
+    name: imageCopy.cropTitle,
+  });
+  const frame = await loadCropPreview(secondDialog);
+  fireEvent.keyDown(frame, { key: 'ArrowRight' });
+  fireEvent.click(
+    within(secondDialog).getByRole('button', { name: imageCopy.cropUpload }),
+  );
+  await waitFor(() => expect(secondDialog.isConnected).toBe(false));
+  expect(previews.mock.calls.map(([file]) => file.name)).toEqual([
+    'first.heic',
+    'second.png',
+  ]);
+  expect(uploads).toHaveBeenCalledTimes(1);
+  const body = uploads.mock.calls[0]![0] as FormData;
+  expect((body.get('file') as File).name).toBe('second.png');
+  expect(JSON.parse(String(body.get('crop')))).toEqual({
+    x: 135,
+    y: 0,
+    size: 600,
+  });
+  expect(revoke).toHaveBeenCalledTimes(2);
 });
 
 it('shows only the master-data destinations the viewer can open', async () => {
@@ -537,6 +694,7 @@ it('navigates ordered images and only renders client-approved details during pre
     id,
     thumbUrl: '/media/thumb-' + id,
     displayUrl: '/media/image-' + id,
+    crop: null,
     width: 80,
     height: 60,
     order: id - 1,

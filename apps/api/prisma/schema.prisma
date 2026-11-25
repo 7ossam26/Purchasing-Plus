@@ -641,6 +641,9 @@ model CatalogItemImage {
   displayKey    String      @unique
   width         Int
   height        Int
+  cropX         Int?
+  cropY         Int?
+  cropSize      Int?
   sortOrder     Int
   isCover       Boolean     @default(false)
   pendingDelete Boolean     @default(false)

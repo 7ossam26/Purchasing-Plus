@@ -109,10 +109,14 @@ add(
   ['catalog.create', 'catalog.edit'],
 );
 add('post', '/catalog/items', 'catalog.create');
-add('patch', '/catalog/items/:id /catalog/items/:id/editor', 'catalog.edit');
+add(
+  'patch',
+  '/catalog/items/:id /catalog/items/:id/editor /catalog/items/:id/images/:imageId/crop',
+  'catalog.edit',
+);
 add(
   'post',
-  '/catalog/items/:id/move /catalog/items/:id/images',
+  '/catalog/items/:id/move /catalog/items/:id/images /catalog/items/:id/images/preview',
   'catalog.edit',
 );
 add(

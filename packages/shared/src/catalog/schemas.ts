@@ -65,6 +65,20 @@ export const imageOrder = z.strictObject({
     .max(10)
     .refine((ids) => new Set(ids).size === ids.length),
 });
+export const catalogImageDisplayLimit = 1600;
+export const imageCrop = z.strictObject({
+  x: z
+    .int()
+    .min(0)
+    .max(catalogImageDisplayLimit - 1),
+  y: z
+    .int()
+    .min(0)
+    .max(catalogImageDisplayLimit - 1),
+  size: z.int().min(1).max(catalogImageDisplayLimit),
+});
+export type ImageCrop = z.infer<typeof imageCrop>;
+export const imageCropUpdate = z.strictObject({ crop: imageCrop.nullable() });
 
 export const createAttribute = z.discriminatedUnion('type', [
   z.strictObject({ name, type: z.literal('TEXT'), clientVisible }),

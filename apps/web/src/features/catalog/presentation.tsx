@@ -12,6 +12,8 @@ import {
 import { Chip } from '../../components/ui/chip.js';
 import type { CatalogItem, NamedRecord } from '../../lib/api/catalog.js';
 
+import { imageFramingStyle } from './image-framing.js';
+
 const icons = {
   zap: Zap,
   droplet: Droplet,
@@ -75,6 +77,25 @@ export function SamplePlaceholder({
 }
 export function SampleCover({ item }: { item: CatalogItem }) {
   const cover = item.images?.find((image) => image.isCover);
+  if (cover?.crop) {
+    const thumbScale = Math.min(1, 400 / Math.max(cover.width, cover.height));
+    const src =
+      cover.crop.size * thumbScale >= 300 ? cover.thumbUrl : cover.displayUrl;
+    return (
+      <span
+        dir="ltr"
+        className="relative block aspect-square w-full overflow-hidden rounded-thumbnail border border-seam bg-plaster"
+      >
+        <img
+          className="absolute max-w-none"
+          style={imageFramingStyle(cover, cover.crop)}
+          src={src}
+          loading="lazy"
+          alt=""
+        />
+      </span>
+    );
+  }
   return cover ? (
     <img
       className="aspect-square w-full rounded-thumbnail border border-seam bg-plaster object-cover"

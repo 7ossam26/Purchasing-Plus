@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown,
   ChevronUp,
+  Crop,
   GripVertical,
   Trash2,
   Upload,
@@ -17,12 +18,8 @@ import { catalogImagesApi } from '../../lib/api/catalog-images.js';
 import type { CatalogImage, CatalogItem } from '../../lib/api/catalog.js';
 import { ApiError } from '../../lib/api/client.js';
 
-type Transfer = {
-  name: string;
-  progress: number;
-  error?: string;
-  done?: boolean;
-};
+import { CropEditor } from './CropEditor.js';
+
 export function ImageManager({
   item,
   onBusy,
@@ -36,17 +33,20 @@ export function ImageManager({
   const confirm = useConfirm();
   const [working, setBusy] = useState(false);
   const busy = working || disabled;
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [queue, setQueue] = useState<{ files: File[]; index: number }>();
+  const [editingId, setEditingId] = useState<number>();
   const [error, setError] = useState<ApiError | null>(null);
   const dragging = useRef<number | null>(null);
   const images = item.images ?? [];
+  const editingImage = images.find((image) => image.id === editingId);
+  const pendingFile = queue?.files[queue.index];
   function apply(next: CatalogImage[]) {
     client.setQueryData<CatalogItem>(
       ['master-data', 'item', item.id],
       (previous) => ({ ...(previous ?? item), images: next }),
     );
   }
-  async function run(operation: () => Promise<void>) {
+  async function perform(operation: () => Promise<void>) {
     setError(null);
     setBusy(true);
     onBusy(true);
@@ -56,11 +56,7 @@ export function ImageManager({
     } catch (error) {
       if (error instanceof ApiError && error.code === 'IMAGE_CLEANUP')
         shouldRefresh = false;
-      setError(
-        error instanceof ApiError
-          ? error
-          : new ApiError(0, 'IMAGE_ERROR', ar.common.fallbackError),
-      );
+      throw error;
     } finally {
       setBusy(false);
       onBusy(false);
@@ -71,39 +67,28 @@ export function ImageManager({
         });
     }
   }
-  function upload(files: File[]) {
-    setTransfers(files.map((file) => ({ name: file.name, progress: 0 })));
-    function update(index: number, data: Partial<Transfer>) {
-      setTransfers((current) =>
-        current.map((row, i) => (i === index ? { ...row, ...data } : row)),
+  async function run(operation: () => Promise<void>) {
+    try {
+      await perform(operation);
+    } catch (failure) {
+      setError(
+        failure instanceof ApiError
+          ? failure
+          : new ApiError(0, 'IMAGE_ERROR', ar.common.fallbackError),
       );
     }
-    void run(async () => {
-      let count = images.length;
-      for (const [index, file] of files.entries()) {
-        if (count >= 10) {
-          update(index, { error: copy.tooMany });
-          continue;
-        }
-        try {
-          const next = await catalogImagesApi.upload(
-            item.id,
-            file,
-            (progress) => update(index, { progress }),
-          );
-          apply(next);
-          count = next.length;
-          update(index, { done: true });
-        } catch (error) {
-          update(index, {
-            error:
-              error instanceof ApiError
-                ? [error.message, error.fix].filter(Boolean).join(' ')
-                : ar.common.fallbackError,
-          });
-        }
-      }
-    });
+  }
+  function selectFiles(files: File[]) {
+    setError(null);
+    if (images.length >= 10) toast.error(copy.tooMany);
+    else setQueue({ files, index: 0 });
+  }
+  function nextFile() {
+    setQueue((current) =>
+      current && current.index + 1 < current.files.length
+        ? { ...current, index: current.index + 1 }
+        : undefined,
+    );
   }
   function move(from: number, to: number) {
     if (from === to || from < 0 || to < 0 || to >= images.length) return;
@@ -160,34 +145,11 @@ export function ImageManager({
             onChange={(event) => {
               const files = Array.from(event.currentTarget.files ?? []);
               event.currentTarget.value = '';
-              if (files.length) upload(files);
+              if (files.length) selectFiles(files);
             }}
           />
         </label>
       </div>
-      {transfers.length > 0 && (
-        <ul className="grid gap-2" aria-live="polite">
-          {transfers.map(({ name, progress, error, done }, index) => (
-            <li key={index} className="rounded-control bg-plaster px-3 py-2">
-              <bdi className="block wrap-anywhere text-small font-semibold">
-                {name}
-              </bdi>
-              {error ? (
-                <p className="text-small text-danger-fg">{error}</p>
-              ) : done ? (
-                <p className="text-small text-ppr-deep">{copy.uploaded}</p>
-              ) : (
-                <progress
-                  className="block w-full accent-ppr"
-                  aria-label={copy.processing}
-                  max={100}
-                  value={progress}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
       {!images.length && (
         <p className="text-small text-concrete">{copy.empty}</p>
       )}
@@ -235,6 +197,16 @@ export function ImageManager({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-1">
+              <Button
+                variant="ghost"
+                iconOnly
+                disabled={busy}
+                aria-label={copy.editCrop}
+                title={copy.editCrop}
+                onClick={() => setEditingId(image.id)}
+              >
+                <Crop size={20} aria-hidden="true" />
+              </Button>
               {!image.isCover && (
                 <Button
                   variant="ghost"
@@ -284,6 +256,52 @@ export function ImageManager({
           </li>
         ))}
       </ul>
+      {pendingFile && (
+        <CropEditor
+          key={queue?.index}
+          itemId={item.id}
+          source={{ file: pendingFile }}
+          onClose={() => setQueue(undefined)}
+          onSkip={nextFile}
+          onAccept={async (crop, progress) => {
+            let count = images.length;
+            await perform(async () => {
+              const next = await catalogImagesApi.upload(
+                item.id,
+                pendingFile,
+                crop,
+                progress,
+              );
+              apply(next);
+              count = next.length;
+            });
+            toast.success(copy.uploaded);
+            if (count < 10) nextFile();
+            else {
+              if (queue && queue.index + 1 < queue.files.length)
+                toast.error(copy.tooMany);
+              setQueue(undefined);
+            }
+          }}
+        />
+      )}
+      {editingImage && (
+        <CropEditor
+          key={`image-${editingImage.id}`}
+          itemId={item.id}
+          source={{ image: editingImage }}
+          onClose={() => setEditingId(undefined)}
+          onAccept={async (crop) => {
+            await perform(async () => {
+              apply(
+                await catalogImagesApi.crop(item.id, editingImage.id, crop),
+              );
+            });
+            toast.success(copy.saved);
+            setEditingId(undefined);
+          }}
+        />
+      )}
     </section>
   );
 }

@@ -764,6 +764,18 @@ export const uiPreview = {
   reasonTitle: 'اكتب سبب الإيقاف',
 } as const;
 export const catalogImages = {
+  cropTitle: 'ظبّط قص صورة البطاقة',
+  editCrop: 'تعديل قص البطاقة',
+  cropArea: 'معاينة قص البطاقة',
+  cropHint: 'اسحب الصورة أو حرّكها بالأسهم عشان توسّط المنتج.',
+  cropZoom: 'تكبير القص',
+  cropReset: 'رجّع التوسيط الافتراضي',
+  cropUpload: 'اعتمد القص وارفع الصورة',
+  cropSave: 'احفظ قص البطاقة',
+  cropSkip: 'تخطّى الصورة',
+  cropPreviewLoading: 'جاري تجهيز المعاينة',
+  cropInvalid: 'إطار القص خارج حدود الصورة.',
+  cropInvalidFix: 'ظبّط القص من المعاينة وجرّب تاني.',
   title: 'صور الصنف',
   label: 'الصورة',
   add: 'رفع صور',

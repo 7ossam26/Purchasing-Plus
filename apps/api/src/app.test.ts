@@ -183,7 +183,7 @@ describe('production deployment', () => {
       try {
         const page = await request(appForMode).get('/').expect(200);
         expect(page.headers['content-security-policy']?.split(';')).toContain(
-          `img-src 'self' ${origin}`,
+          `img-src 'self' blob: ${origin}`,
         );
       } finally {
         await appForMode.locals.db.$disconnect();

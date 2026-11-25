@@ -1,17 +1,41 @@
-import { emptyInput, imageOrder, pathId } from '@purchasing-plus/shared';
+import {
+  emptyInput,
+  imageCropUpdate,
+  imageOrder,
+  pathId,
+} from '@purchasing-plus/shared';
 import { Router } from 'express';
 
 import { endpoint } from '../access/endpoint.js';
 
-import { prepareImage } from './pipeline.js';
+import { imagePreview, prepareImage, readImageUpload } from './pipeline.js';
+import { assertItem } from './repo.js';
 import {
   deleteImage,
   reorderImages,
   setCover,
+  updateCrop,
   uploadImage,
 } from './service.js';
 
 export const catalogImages = Router();
+catalogImages.post(
+  '/items/:id/images/preview',
+  ...endpoint(
+    ['catalog.edit'],
+    ({ req, tx }) => assertItem(tx, pathId.parse(req.params.id)),
+    200,
+    undefined,
+    undefined,
+    true,
+    async (_item, response) => {
+      const preview = await imagePreview(
+        (await readImageUpload(response.req)).file,
+      );
+      response.type('image/webp').send(preview);
+    },
+  ),
+);
 catalogImages.post(
   '/items/:id/images',
   ...endpoint(
@@ -25,6 +49,17 @@ catalogImages.post(
     201,
     undefined,
     prepareImage,
+  ),
+);
+catalogImages.patch(
+  '/items/:id/images/:imageId/crop',
+  ...endpoint(['catalog.edit'], (ctx) =>
+    updateCrop(
+      ctx,
+      pathId.parse(ctx.req.params.id),
+      pathId.parse(ctx.req.params.imageId),
+      imageCropUpdate.parse(ctx.req.body).crop,
+    ),
   ),
 );
 catalogImages.put(

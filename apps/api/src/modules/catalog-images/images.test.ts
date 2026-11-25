@@ -109,7 +109,7 @@ let item: number,
   editor: string,
   picker: string;
 const auth = (
-  method: 'get' | 'post' | 'put' | 'delete',
+  method: 'get' | 'post' | 'put' | 'patch' | 'delete',
   path: string,
   cookie = editor,
 ) =>
@@ -284,3 +284,97 @@ it('limits the item, serves signed files, updates cover and exposes nested thumb
     await db.auditLog.count({ where: { action: 'catalogImage.delete' } }),
   ).toBe(1);
 }, 20000);
+
+it('previews oriented images without writing files and saves framing independently of the full image', async () => {
+  const source = await db.catalogItem.findUniqueOrThrow({
+    where: { id: item },
+  });
+  const target = (
+    await auth('post', '/catalog/items')
+      .send({
+        name: 'إطار الكشاف',
+        unitId: source.unitId,
+        nodeId: source.nodeId,
+      })
+      .expect(201)
+  ).body.id;
+  const targetPath = `/catalog/items/${target}/images`;
+  const preview = (buffer: Buffer, cookie = editor, url = targetPath) =>
+    auth('post', url + '/preview', cookie).attach('file', buffer, 'photo');
+
+  await preview(heic, '').expect(401);
+  await preview(heic, picker).expect(403);
+  await preview(heic, editor, '/catalog/items/999999/images').expect(404);
+  await preview(Buffer.from('invalid')).expect(422);
+  for (const [input, width, height] of [
+    [heic, 96, 64],
+    [jpeg, 800, 1600],
+  ] as const) {
+    const response = await preview(input)
+      .expect(200)
+      .expect('Content-Type', /webp/);
+    expect(await sharp(response.body).metadata()).toMatchObject({
+      width,
+      height,
+    });
+  }
+  expect(await db.catalogItemImage.count({ where: { itemId: target } })).toBe(
+    0,
+  );
+  await expect(
+    readdir(join(root, 'catalog', String(target))),
+  ).rejects.toMatchObject({ code: 'ENOENT' });
+
+  const crop = { x: 30, y: 8, size: 56 };
+  const add = (value: string) =>
+    auth('post', targetPath)
+      .attach('file', heic, 'photo.heic')
+      .field('crop', value);
+  await add('{').expect(422);
+  await add(JSON.stringify({ ...crop, x: 50 })).expect(422);
+  const [image] = (await add(JSON.stringify(crop)).expect(201)).body;
+  expect(image).toMatchObject({
+    crop,
+    width: 96,
+    height: 64,
+    isCover: true,
+    order: 0,
+  });
+
+  const cropPath = targetPath + '/' + image.id + '/crop';
+  const update = (value: unknown, cookie = editor, url = cropPath) =>
+    auth('patch', url, cookie).send({ crop: value });
+  const changed = { x: 0, y: 1, size: 50 };
+  await update(changed, picker).expect(403);
+  await update(changed, editor, path() + '/' + image.id + '/crop').expect(404);
+  await update({ ...changed, size: 65 }).expect(422);
+  await update({ ...changed, x: 0.5 }).expect(422);
+  const original = (await api.get(image.displayUrl).expect(200)).body;
+  const fileWrites = vi.spyOn(storage, 'put');
+  try {
+    const [updated] = (await update(changed).expect(200)).body;
+    expect(updated).toMatchObject({
+      id: image.id,
+      crop: changed,
+      isCover: true,
+      order: 0,
+    });
+    expect(new URL(updated.displayUrl, 'http://localhost').pathname).toBe(
+      new URL(image.displayUrl, 'http://localhost').pathname,
+    );
+    expect((await api.get(updated.displayUrl).expect(200)).body).toEqual(
+      original,
+    );
+    expect(
+      (await auth('get', '/catalog/items/' + target, picker).expect(200)).body
+        .images[0].crop,
+    ).toEqual(changed);
+    expect((await update(null).expect(200)).body[0].crop).toBeNull();
+    expect(fileWrites).not.toHaveBeenCalled();
+    expect(
+      await db.auditLog.count({ where: { action: 'catalogImage.crop' } }),
+    ).toBe(2);
+  } finally {
+    fileWrites.mockRestore();
+  }
+});

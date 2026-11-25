@@ -2,6 +2,7 @@ import type {
   createCatalogItem,
   editCatalogItem,
   editCatalogItemInEditor,
+  ImageCrop,
 } from '@purchasing-plus/shared';
 
 import { api } from './client.js';
@@ -46,6 +47,7 @@ export interface CatalogImage {
   height: number;
   order: number;
   isCover: boolean;
+  crop: ImageCrop | null;
 }
 export interface CatalogItem extends NamedRecord {
   code: string;

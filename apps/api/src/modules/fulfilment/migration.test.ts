@@ -1,5 +1,8 @@
 import type { PrismaClient } from '@prisma/client';
-import { defaultSettings } from '@purchasing-plus/shared';
+import {
+  defaultSettings,
+  previousSupplyOrderIntros,
+} from '@purchasing-plus/shared';
 import { sumAmounts } from '@purchasing-plus/shared/lifecycle';
 import type { PermissionKey } from '@purchasing-plus/shared/permissions';
 import request from 'supertest';
@@ -22,6 +25,7 @@ type Method = 'get' | 'post' | 'patch' | 'put';
 type User = { id: number; cookie: string };
 let east: number, west: number, nodeId: number, unitId: number;
 let catalogItemId: number, first: number, second: number;
+let finance: User;
 let engineer: User,
   westEngineer: User,
   manager: User,
@@ -136,6 +140,12 @@ beforeAll(async () => {
   accountant = await user(
     'accountant',
     ['requests.viewPrices', 'requests.viewSupplierNames'],
+    [],
+    'ALL',
+  );
+  finance = await user(
+    'finance',
+    ['reports.spending', 'requests.viewPrices'],
     [],
     'ALL',
   );
@@ -404,8 +414,42 @@ it('releases requests left waiting for approval once, preserving pricing, histor
     skipped: [],
     notificationsRetired: 3,
     rolesUpdated: [approverRoleId],
+    // A custom supply-order template is never replaced.
+    supplyOrderIntroUpdated: false,
   });
   expect(describeMigration(outcome)).toContain('released 2 request(s)');
+  expect(
+    (await db.settings.findUniqueOrThrow({ where: { id: 1 } }))
+      .supplyOrderIntro,
+  ).toBe('توريد {requestNumber} إلى {siteName}:');
+  // Released rounds keep their original submission: no decision is invented, and spending
+  // counts them on the day purchasing submitted them, not on the migration day.
+  expect(
+    await db.pricingRound.findFirstOrThrow({
+      where: { requestId: waiting.id, number: 1 },
+      select: { status: true, submittedAt: true, decidedAt: true },
+    }),
+  ).toEqual({
+    status: 'SUBMITTED',
+    submittedAt: new Date('2026-11-20T09:00:00Z'),
+    decidedAt: null,
+  });
+  const spending = (day: string) =>
+    api
+      .get('/api/v1/reports/spending?from=' + day + '&to=' + day)
+      .set('Cookie', finance.cookie)
+      .expect(200);
+  // Both rounds left waiting were submitted on 2026-11-20: 80.00 + 9.99, and the 15.00 fee.
+  expect(
+    (await spending('2026-11-20')).body.metrics.map(
+      (metric: { value: string }) => metric.value,
+    ),
+  ).toEqual(['89.99', '15.00']);
+  expect(
+    (await spending('2026-11-25')).body.metrics.map(
+      (metric: { value: string }) => metric.value,
+    ),
+  ).toEqual(['0', '0']);
   const afterMigration = await counts();
   // One supply order per supplier of each released round, one timeline event per request.
   expect(afterMigration.orders - before.orders).toBe(3);
@@ -594,6 +638,7 @@ it('releases requests left waiting for approval once, preserving pricing, histor
     skipped: [],
     notificationsRetired: 0,
     rolesUpdated: [],
+    supplyOrderIntroUpdated: false,
   });
   expect(describeMigration(rerun)).toBe('');
   expect(await counts()).toEqual(after);
@@ -645,4 +690,44 @@ it('skips a waiting request whose lines no longer await approval and changes not
       select: { status: true },
     }),
   ).toEqual([{ status: 'PENDING' }]);
+});
+
+it('moves a template still holding the former default to the new wording, once, and keeps written orders', async () => {
+  const [former] = previousSupplyOrderIntros;
+  await db.settings.update({
+    where: { id: 1 },
+    data: { supplyOrderIntro: former },
+  });
+  const written = await db.supplyOrder.findMany({
+    select: { id: true, message: true },
+    orderBy: { id: 'asc' },
+  });
+  expect(written.length).toBeGreaterThan(0);
+  const outcome = await migrate();
+  expect(outcome).toMatchObject({ supplyOrderIntroUpdated: true });
+  expect(describeMigration(outcome)).toContain(
+    'updated the default supply-order message',
+  );
+  const stored = await db.settings.findUniqueOrThrow({ where: { id: 1 } });
+  expect(stored.supplyOrderIntro).toBe(defaultSettings.supplyOrderIntro);
+  expect(stored.supplyOrderIntro).toContain('تم إصدار أمر توريد');
+  // Messages already sent or prepared for suppliers keep the text they were written with.
+  expect(
+    await db.supplyOrder.findMany({
+      select: { id: true, message: true },
+      orderBy: { id: 'asc' },
+    }),
+  ).toEqual(written);
+  const audit = await db.auditLog.findFirstOrThrow({
+    where: { action: 'settings.update' },
+    orderBy: { id: 'desc' },
+  });
+  expect(audit.oldValue).toMatchObject({ supplyOrderIntro: former });
+  expect(audit.newValue).toMatchObject({
+    supplyOrderIntro: defaultSettings.supplyOrderIntro,
+  });
+  expect(verifyAudit(env.AUDIT_HMAC_SECRET, audit)).toBe(true);
+  const audits = await db.auditLog.count();
+  expect(await migrate()).toMatchObject({ supplyOrderIntroUpdated: false });
+  expect(await db.auditLog.count()).toBe(audits);
 });

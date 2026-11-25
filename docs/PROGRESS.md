@@ -346,10 +346,38 @@ Each step only touches leftovers, so a rerun writes no orders, events, notificat
 - A new event type rather than rewording `PRICING_SUBMITTED`, so old events keep saying «للاعتماد».
 - `REJECTED_AUTO` and item `REJECTED` are now reachable only from history.
 
-**Open questions.**
-1. Retiring `pricing.approve` and `pricing.reject` drops them from existing roles. Confirm that no role should get a replacement duty.
-2. Spending dates released rounds by their original submission, not by the migration time.
-3. Existing installations keep their saved `supplyOrderIntro`. The default wording «تم اعتماد طلب» still reads as the company confirming an order; confirm whether it should change.
-4. Pending rounds on cancelled requests are left as `PENDING` history.
+**Open questions.** All four were answered in the follow-up below: the keys are retired with no replacement duty, released rounds keep their original submission date for spending, the default supply-order wording changed, and pending rounds on cancelled requests stay as history.
 
 **Verification.** `pnpm lint`, `pnpm typecheck` and `pnpm test` passed: all 45 files and 1,213 Vitest tests. That is 19 fewer than the previous change's 1,232. The generated lifecycle matrix lost its per-status, identity and item-state cases for the two removed approval actions, which were larger than the cases added for the one system release action. Approve and reject UI and API tests were also replaced by fewer read-only history tests. Tests ran serially against a throwaway local PostgreSQL 18 cluster with both migrations applied, because the project's port-5433 development cluster was not running. Local Node was 25.2.1 (engines specify 24). Coverage gates and a Chromium walk-through were not run for this change.
+
+## Follow-up — Stakeholder verification and supply-order wording (2026-11-25)
+
+**Decisions confirmed.**
+- `pricing.approve` and `pricing.reject` are retired with no replacement duty. Roles simply lose them.
+- Spending counts a released round on its original pricing submission date. The migration keeps `submittedAt` and leaves `decidedAt` null.
+- Undecided rounds on cancelled requests stay `PENDING` as history, shown as «من غير قرار».
+
+Each decision is pinned by a test in `fulfilment/migration.test.ts`. The spending test reads the report for both 2026-11-20 and the migration day.
+
+**Supply-order wording.** The default `supplyOrderIntro` is now «السلام عليكم، تم إصدار أمر توريد للطلب {requestNumber}. برجاء توريد الآتي إلى موقع {siteName} – {siteAddress}:». The former default is exported as `previousSupplyOrderIntros`. The idempotent direct-receipt migration now has a fourth step: a stored template still exactly equal to the former default moves to the new one, with a signed `settings.update` audit row. Any other text is a custom template and is kept. Supply-order messages already written keep their text, and historical approval records are untouched. A rerun writes nothing. Spec 03 states the new default.
+
+**Stakeholder experience, verified in a browser.**
+- **Setup.** The work used the `direct-receipt-workflow` branch and a production web build (`pnpm --filter web build`). A launcher ran the real API with the same bootstrap and migration as `src/server.ts`, served the built SPA, and listened on `http://localhost:3100`. It used a separate `purchasing_verify` database on a throwaway local PostgreSQL 18 cluster. Ports 3000 and 5173 were already in use by other local processes, which were left running, and the project's port-5433 cluster was down.
+- **Seed data.** Everything was seeded through the HTTP API only, as superadmin: sites «موقع الشرق» and «موقع الغرب»; a role holding only `requests.view` (ASSIGNED) for user `viewer` on the east site; engineers per site; a manager; a buyer; and a supplier.
+- **Requests.** An east request and a west request were each submitted, approved and priced with a fee, so both were awaiting receipt. A west draft was also saved.
+- **Browser.** Playwright-core 1.65.1, installed outside the repo, drove Chromium 1248 headless at 360×800 and 1280×800.
+
+**Observed in both runs (17 checks each).**
+- **Home.** After signing in through the login form, Home showed the «الطلبات» tile and no purchasing, catalog-management or admin entries. On the 360px screenshot «محتاج مني» was still showing its loading skeleton; the code renders «مفيش حاجة مستنياك دلوقتي.» for a user with no queues.
+- **New draft reached the open list.** Opening the tile showed the east request. With the list open, the east engineer saved a new draft through the API. It appeared in the open list without a reload, labelled «مسودة» with site, category and creator.
+- **Filters.** The site filter offered only «كل المواقع» and «موقع الشرق». The stage filter included «مسودة» and no longer offered «بانتظار اعتماد التسعير». Filtering by «مسودة» listed only drafts.
+- **Draft details.** Opening the draft showed the «مسودة» heading, creator, item and specs, and the six-step rail. There were no action buttons, and the page stayed read-only with no redirect to the editor.
+- **Priced east request.** It showed «بانتظار الاستلام» on the rail directly after purchasing. Its page text did not contain the line total, fee, supplier name or phone. There were no purchasing, receipt or timeline tabs and no pricing history.
+- **Other site.** The west request and the west draft never appeared in the list. Opening them by URL showed «السجل غير موجود» (API 404).
+- **Network and console.** The only failed API calls were the pre-login `401 /api/v1/me` session probe and the expected west 404s.
+
+**Navigation and list query.** No fix was needed. The API, route guards and the Home tile were already permission-based, and the list query sends no status or stage filter. A web regression test in `pages/home.test.tsx` now pins this path: a `requests.view`-only user goes from the Home tile to the list, whose request carries no status, stage, queue or creator filter, then opens someone else's draft read-only and sends no write request.
+
+**Pre-existing issue seen, not changed.** When the API serves the built SPA under its production CSP (`style-src 'self'`), Chromium blocks the `<style>` element that Sonner injects for toast styles. It logs a CSP error per page load, so toasts would be unstyled in that setup. This change touches neither the toast component nor the CSP. It needs its own fix, for example importing Sonner's stylesheet as a file or allowing that style.
+
+**Verification.** `pnpm lint`, `pnpm typecheck` and `pnpm test` passed: all 45 files and 1,216 Vitest tests. The three new tests are the default-wording case in shared `settings.test.ts`, the former-default migration case in API `migration.test.ts`, and the Home stakeholder path in web `home.test.tsx`. Tests ran serially on the same throwaway PostgreSQL 18 cluster with Node 25.2.1. Coverage gates were not run.

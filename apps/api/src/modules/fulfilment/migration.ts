@@ -1,4 +1,8 @@
 import type { PrismaClient } from '@prisma/client';
+import {
+  defaultSettings,
+  previousSupplyOrderIntros,
+} from '@purchasing-plus/shared';
 import type { RefusalCode } from '@purchasing-plus/shared/lifecycle';
 import { retiredPermissionKeys } from '@purchasing-plus/shared/permissions';
 
@@ -8,6 +12,7 @@ import type { EventBus, LiveSignal } from '../events/bus.js';
 import { pendingApprovalIds } from '../requests/repo.js';
 import { runSystemTransition } from '../requests/service.js';
 import { removeRoleKeys, rolesHoldingKeys } from '../roles/repo.js';
+import { replaceDefaultSupplyOrderIntro } from '../settings/repo.js';
 
 import { retireApprovalNotifications } from './repo.js';
 
@@ -16,6 +21,7 @@ export type DirectReceiptMigration = {
   skipped: { requestId: number; code: RefusalCode | 'NOT_FOUND' }[];
   notificationsRetired: number;
   rolesUpdated: number[];
+  supplyOrderIntroUpdated: boolean;
 };
 
 // A short log line for startup and the command. Empty when there was nothing left to migrate.
@@ -31,6 +37,8 @@ export function describeMigration(result: DirectReceiptMigration) {
       `marked ${result.notificationsRetired} approval notification(s) read`,
     result.rolesUpdated.length &&
       `removed approval keys from ${result.rolesUpdated.length} role(s)`,
+    result.supplyOrderIntroUpdated &&
+      'updated the default supply-order message',
   ].filter(Boolean);
   return parts.length ? `Direct-receipt migration: ${parts.join('; ')}.\n` : '';
 }
@@ -53,7 +61,9 @@ function auditor(tx: Tx, secret: string) {
 //    system transition, in its own transaction with its supply orders, catalog prices,
 //    timeline event, notifications and audit row. Live signals publish after that commit.
 // 2. Unread notifications that asked for the removed approval are marked read.
-// 3. Roles drop the retired approval keys, with a signed audit row each.
+// 3. Roles drop the retired approval keys, with a signed audit row each. No duty replaces them.
+// 4. A supply-order template still holding the former default («تم اعتماد طلب») takes the new
+//    default («تم إصدار أمر توريد»). Custom templates and messages already written are kept.
 export async function migrateToDirectReceipt(
   db: PrismaClient,
   options: { auditSecret: string; clock?: () => Date; eventBus?: EventBus },
@@ -64,6 +74,7 @@ export async function migrateToDirectReceipt(
     skipped: [],
     notificationsRetired: 0,
     rolesUpdated: [],
+    supplyOrderIntroUpdated: false,
   };
   const publish = (signals: LiveSignal[]) => {
     for (const signal of signals) options.eventBus?.publish(signal);
@@ -127,5 +138,25 @@ export async function migrateToDirectReceipt(
     }
     return updated;
   });
+  outcome.supplyOrderIntroUpdated = await accessTransaction(
+    db,
+    true,
+    async (tx) => {
+      const change = await replaceDefaultSupplyOrderIntro(
+        tx,
+        previousSupplyOrderIntros,
+        defaultSettings.supplyOrderIntro,
+      );
+      if (change)
+        await auditor(tx, options.auditSecret)(
+          'settings.update',
+          'Settings',
+          null,
+          change.before,
+          change.after,
+        );
+      return change !== null;
+    },
+  );
   return outcome;
 }

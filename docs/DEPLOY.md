@@ -55,7 +55,7 @@ The VPS runs one Purchasing+ container and a separate PostgreSQL 17 service. Tra
    }
    ```
 
-4. Click **Deploy**. The application logs should show Prisma completing its migration check before the server starts. The first start after the direct-receipt change also logs one `Direct-receipt migration:` line. It names how many requests that were waiting for the removed pricing approval moved to receipt, and any request it skipped. Later starts find nothing and log nothing. To run the same idempotent step by hand, use `pnpm --filter api migrate:direct-receipt` in the container terminal. Check the public health route.
+4. Click **Deploy**. The application logs should show Prisma completing its migration check before the server starts. The first start after the direct-receipt change also logs one `Direct-receipt migration:` line. It names how many requests that were waiting for the removed pricing approval moved to receipt, and any request it skipped. It also says whether it replaced a supply-order template that still held the former default wording; custom templates are kept. Later starts find nothing and log nothing. To run the same idempotent step by hand, use `pnpm --filter api migrate:direct-receipt` in the container terminal. Check the public health route.
 
    ```sh
    curl -fsS https://purchasing.example.com/api/health

@@ -1,4 +1,5 @@
 import {
+  defaultSettings,
   recordDestinations,
   reportDestinations,
 } from '@purchasing-plus/shared';
@@ -6,8 +7,14 @@ import {
   admin,
   ar,
   reportsUi,
+  requestUi,
   uiPreview,
 } from '@purchasing-plus/shared/i18n/ar';
+import {
+  itemStates,
+  openItem,
+  statusMap,
+} from '@purchasing-plus/shared/lifecycle';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
   cleanup,
@@ -26,6 +33,7 @@ import { AppProviders, routes } from '../app/routes.js';
 import { useCan, useCanOnSite } from '../app/session.js';
 import { Button } from '../components/ui/button.js';
 import type { SessionProfile } from '../lib/api/auth.js';
+import type { RequestDto } from '../lib/api/requests.js';
 
 const profile: SessionProfile = {
   user: { id: 1, name: 'حسن', username: 'hassan' },
@@ -394,4 +402,102 @@ it.each([
   });
   await screen.findByRole('heading', { name: heading });
   expect((await axe(document.body)).violations).toEqual([]);
+});
+
+// Regression for the stakeholder path verified in the browser: a site viewer without any
+// workflow key reaches a freshly saved draft from Home and opens it read-only.
+it('takes a view-only site stakeholder from Home to someone else’s saved draft, read-only', async () => {
+  const site = { id: 1, name: uiPreview.exampleA };
+  const category = { id: 3, name: 'كهربا' };
+  const draft: RequestDto = {
+    id: 7,
+    number: null,
+    version: 2,
+    createdById: 40,
+    siteId: site.id,
+    categoryId: category.id,
+    status: 'DRAFT',
+    urgency: 'NORMAL',
+    urgencyLocked: false,
+    isModified: false,
+    unitOrClient: null,
+    note: null,
+    site,
+    category,
+    creator: { id: 40, name: 'مهندس الموقع' },
+    displayedStage: 'DRAFT',
+    stageStartedAt: '2026-11-25T10:00:00.000Z',
+    stateCounts: Object.fromEntries(
+      itemStates.map((state) => [state, state === 'OPEN' ? 1 : 0]),
+    ) as RequestDto['stateCounts'],
+    items: [
+      {
+        ...openItem(
+          {
+            id: 70,
+            catalogItemId: null,
+            nodeId: category.id,
+            unitId: 2,
+            otherName: 'خرسانة جاهزة',
+            specs: 'مواصفة الموقع',
+            quantity: '3.00',
+            snapshot: {
+              name: 'خرسانة جاهزة',
+              code: null,
+              unitName: 'م³',
+              attributes: {},
+              nodePath: [category.name],
+              coverImageKey: null,
+            },
+          },
+          1,
+        ),
+        isOther: true,
+      },
+    ],
+    availableActions: [],
+  };
+  const { router, fetch } = setup('/', (path) => {
+    const url = new URL(path, 'http://localhost');
+    if (url.pathname === '/api/v1/me')
+      return json({ ...profile, permissions: ['requests.view'] });
+    if (url.pathname === '/api/v1/settings') return json(defaultSettings);
+    if (url.pathname === '/api/v1/requests/options')
+      return json({ sites: [site], categories: [category], units: [] });
+    if (url.pathname === '/api/v1/requests')
+      return json({ items: [draft], total: 1, page: 1, pageSize: 25 });
+    if (url.pathname === '/api/v1/requests/7') return json(draft);
+    return json({ queues: [], items: [], unread: 0 });
+  });
+  fireEvent.click(
+    await screen.findByRole('link', { name: new RegExp(requestUi.title) }),
+  );
+  await waitFor(() => expect(router.state.location.pathname).toBe('/requests'));
+  const row = await screen.findByRole('link', {
+    name: new RegExp(statusMap.DRAFT.label),
+  });
+  expect(row.getAttribute('href')).toBe('/requests/7');
+  // The list asks for every state in scope: nothing filters drafts out on the client.
+  const list = fetch.mock.calls
+    .map(([path]) => new URL(path, 'http://localhost'))
+    .find((url) => url.pathname === '/api/v1/requests')!;
+  for (const key of ['status', 'stage', 'queue', 'createdById'])
+    expect(list.searchParams.has(key)).toBe(false);
+  fireEvent.click(row);
+  expect(
+    await screen.findByRole('heading', { name: 'خرسانة جاهزة' }),
+  ).toBeTruthy();
+  expect(screen.getByText('مهندس الموقع', { exact: false })).toBeTruthy();
+  for (const name of [
+    requestUi.continueDraft,
+    requestUi.deleteDraft,
+    requestUi.submit,
+    requestUi.edit,
+    requestUi.copy,
+  ])
+    expect(screen.queryByRole('button', { name })).toBeNull();
+  expect(router.state.location.pathname).toBe('/requests/7');
+  expect(
+    fetch.mock.calls.some(([, init]) => (init?.method ?? 'GET') !== 'GET'),
+  ).toBe(false);
 });

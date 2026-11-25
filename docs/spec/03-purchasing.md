@@ -43,7 +43,7 @@ There is no pricing approval step (removed 2026-11-25). Holders of `requests.vie
 
 - Created automatically when pricing is submitted (one per supplier, with that supplier's submitted items) and when remaining items are re-priced to a different supplier.
 - Same send pattern as batches: editable message, «افتح واتساب», «نسخ الرسالة», «تم الإرسال».
-- Default `settings.supplyOrderIntro`: «السلام عليكم، تم اعتماد طلب {requestNumber}. برجاء توريد الآتي إلى موقع {siteName} – {siteAddress}:» followed by `{lineNo}) {name} – {specs} – {quantity} {unit}` lines.
+- Default `settings.supplyOrderIntro`: «السلام عليكم، تم إصدار أمر توريد للطلب {requestNumber}. برجاء توريد الآتي إلى موقع {siteName} – {siteAddress}:» followed by `{lineNo}) {name} – {specs} – {quantity} {unit}` lines. A stored template still equal to the former default («تم اعتماد طلب …») moves to this one during the direct-receipt migration; custom templates and messages already written are kept.
 - Sending a supply order never blocks receipt.
 
 ## Receipt (الاستلام)

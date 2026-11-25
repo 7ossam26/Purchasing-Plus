@@ -306,6 +306,13 @@ it('follows one request from its first saved draft to completion, with receipt o
   expect(r.availableActions.map((a) => a.action)).not.toContain(
     'approvePricing',
   );
+  // The default supplier message announces an issued supply order, not an approval.
+  const orders = (
+    await http(sender, 'get', at(r, '/supply-orders')).expect(200)
+  ).body as { items: { message: string }[] };
+  expect(orders.items[0]!.message).toContain(
+    'تم إصدار أمر توريد للطلب ' + String(r.number),
+  );
   const sent = await db.requestEvent.findFirstOrThrow({
     where: { requestId: r.id, type: 'PRICING_SENT_FOR_RECEIPT' },
     include: { notifications: { orderBy: { userId: 'asc' } } },

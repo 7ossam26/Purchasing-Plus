@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { id, pagination, pathId } from '../access.js';
+import { amount } from '../lifecycle/model.js';
 
 import { normalizeArabic } from './normalize.js';
 
@@ -136,12 +137,16 @@ const attributeValues = z
 export const catalogAttributeNumber = z
   .string()
   .regex(/^[+-]?[0-9]{1,26}(?:\.[0-9]{1,12})?$/);
+// A manually entered reference price in EGP, a Decimal(14,2) string. Null means "not set" and
+// stays distinct from an explicit "0.00". It never feeds quotations, rounds or order totals.
+export const catalogUnitPrice = amount.nullable();
 export const createCatalogItem = z.strictObject({
   name,
   nodeId: id,
   unitId: id,
   description: description.default(''),
   attributeValues: attributeValues.default([]),
+  unitPrice: catalogUnitPrice.optional(),
   isActive: z.literal(false).optional(),
 });
 const catalogItemEdit = z.strictObject({
@@ -149,6 +154,7 @@ const catalogItemEdit = z.strictObject({
   unitId: id.optional(),
   description: description.optional(),
   attributeValues: attributeValues.optional(),
+  unitPrice: catalogUnitPrice.optional(),
   isActive: z.literal(true).optional(),
 });
 export const editCatalogItem = catalogItemEdit.refine(changes);

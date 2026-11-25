@@ -473,9 +473,12 @@ it('opens the queue and sends a three-supplier batch, persists a supplier tweak,
       .filter((call) => call.path.endsWith('/sent'))
       .map((call) => call.body.version),
   ).toEqual([9, 10, 11]);
-  expect(
-    fetch.mock.calls.some(([url]) => url.includes('queue=purchasing')),
-  ).toBe(true);
+  // The workspace opens on every lifecycle state, not only the actionable queue.
+  const workspace = fetch.mock.calls.find(([url]) =>
+    url.includes('workspace=purchasing'),
+  );
+  expect(workspace).toBeDefined();
+  expect(workspace![0]).not.toContain('queue=');
 });
 
 it('autosaves quote and fee separately, searches outside the category, toggles availability, and confirms pricing', async () => {

@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { masterData } from '@purchasing-plus/shared/i18n/ar';
 import { registry } from '@purchasing-plus/shared/permissions';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -1013,4 +1014,126 @@ it('saves item changes, relocation and active status in one update', async () =>
     isActive: false,
   }).expect(200);
   expect(stopped.body.isActive).toBe(false);
+});
+
+it('stores an optional unit price, keeps "not set" distinct from zero and redacts it by grant', async () => {
+  const root = await category('UPR');
+  const folder = await group(root, 'أسعار');
+  const create = (fields: object, cookie = manager) =>
+    send(
+      'post',
+      '/catalog/items',
+      { name: 'صنف', nodeId: folder, unitId: pieceId, ...fields },
+      cookie,
+    );
+  const unset = (await create({ name: 'بدون سعر' }).expect(201)).body;
+  const zero = (await create({ name: 'سعره صفر', unitPrice: '0' }).expect(201))
+    .body;
+  const priced = (
+    await create({ name: 'مسعّر', unitPrice: '1250.5' }).expect(201)
+  ).body;
+  expect([unset.unitPrice, zero.unitPrice, priced.unitPrice]).toEqual([
+    null,
+    '0.00',
+    '1250.50',
+  ]);
+  const stored = new Map(
+    (
+      await db.catalogItem.findMany({
+        where: { id: { in: [unset.id, zero.id, priced.id] } },
+      })
+    ).map((row) => [row.id, row.unitPrice?.toFixed(2) ?? null]),
+  );
+  expect([
+    stored.get(unset.id),
+    stored.get(zero.id),
+    stored.get(priced.id),
+  ]).toEqual([null, '0.00', '1250.50']);
+  for (const unitPrice of [
+    '-1',
+    '1.234',
+    '1e3',
+    12,
+    '',
+    ' 5',
+    '01',
+    '1234567890123',
+    false,
+  ])
+    await create({ name: 'سعر غلط', unitPrice }).expect(422);
+  expect(await db.catalogItem.count({ where: { name: 'سعر غلط' } })).toBe(0);
+
+  // Editing sets, keeps and clears the price; omitting it leaves the stored value alone.
+  const item = '/catalog/items/' + priced.id;
+  expect(
+    (await send('patch', item, { unitPrice: '99.99' }).expect(200)).body
+      .unitPrice,
+  ).toBe('99.99');
+  expect(
+    (await send('patch', item + '/editor', { name: 'مسعّر 2' }).expect(200)).body
+      .unitPrice,
+  ).toBe('99.99');
+  const audit = await db.auditLog.findFirstOrThrow({
+    where: { action: 'catalogItem.update', entityId: String(priced.id) },
+    orderBy: { id: 'asc' },
+  });
+  expect(audit.oldValue).toMatchObject({ unitPrice: '1250.50' });
+  expect(audit.newValue).toMatchObject({ unitPrice: '99.99' });
+  expect(
+    (await send('patch', item + '/editor', { unitPrice: null }).expect(200))
+      .body.unitPrice,
+  ).toBeNull();
+  await send('patch', item, { unitPrice: '0.00' }).expect(200);
+  await send('patch', item, { unitPrice: '0.001' }).expect(422);
+  // The entered price is reference data only: purchase price history stays empty.
+  const detail = (await send('get', item).expect(200)).body;
+  expect(detail).toMatchObject({ unitPrice: '0.00', latestPrice: null });
+
+  // Without requests.viewPrices the field is absent everywhere and cannot be written.
+  await makeUser(db, 'catalog-blind-editor', [
+    'catalog.create',
+    'catalog.edit',
+  ]);
+  const blind = await login('catalog-blind-editor');
+  await makeUser(db, 'catalog-price-reader', [
+    'catalog.view',
+    'requests.viewPrices',
+  ]);
+  const reader = await login('catalog-price-reader');
+  for (const cookie of [blind, picker]) {
+    expect(
+      (await send('get', item, undefined, cookie).expect(200)).body,
+    ).not.toHaveProperty('unitPrice');
+    const listed = (
+      await send(
+        'get',
+        '/catalog/nodes/' + folder + '/items',
+        undefined,
+        cookie,
+      ).expect(200)
+    ).body.items;
+    expect(listed).toHaveLength(3);
+    for (const row of listed) expect(row).not.toHaveProperty('unitPrice');
+    for (const row of (await search(root, 'سعر', cookie)).body.items)
+      expect(row).not.toHaveProperty('unitPrice');
+  }
+  for (const unitPrice of ['5', null]) {
+    const refused = await send('patch', item, { unitPrice }, blind).expect(403);
+    expect(refused.body.message).toBe(masterData.unitPriceForbidden);
+    await create({ name: 'محجوب', unitPrice }, blind).expect(403);
+  }
+  const renamed = (
+    await send('patch', item, { name: 'اسم بدون سعر' }, blind).expect(200)
+  ).body;
+  expect(renamed).not.toHaveProperty('unitPrice');
+  const added = (await create({ name: 'من غير سعر' }, blind).expect(201)).body;
+  expect(added).not.toHaveProperty('unitPrice');
+  expect(
+    (
+      await db.catalogItem.findUniqueOrThrow({ where: { id: priced.id } })
+    ).unitPrice?.toFixed(2),
+  ).toBe('0.00');
+  expect(
+    (await send('get', item, undefined, reader).expect(200)).body.unitPrice,
+  ).toBe('0.00');
 });

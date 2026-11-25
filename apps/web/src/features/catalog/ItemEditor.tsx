@@ -1,5 +1,6 @@
 import {
   catalogAttributeNumber,
+  catalogUnitPrice,
   createCatalogItem,
   editCatalogItemInEditor,
 } from '@purchasing-plus/shared';
@@ -139,6 +140,9 @@ function ItemForm({
   onBusy: (busy: boolean) => void;
 }) {
   const canDeactivate = useCan('catalog.delete');
+  // The entered price follows the same visibility key as every other price.
+  const showPrice = useCan('requests.viewPrices');
+  const [unitPrice, setUnitPrice] = useState(item?.unitPrice ?? '');
   const [path, setPath] = useState(initialPath);
   const [pick, setPick] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -242,6 +246,10 @@ function ItemForm({
     if (!unitId) invalid.unit = copy.chooseUnit;
     if (description.length > 2000)
       invalid.description = copy.invalidDescription;
+    // An empty field clears the price; "0" is kept as an explicit zero.
+    const price = unitPrice.trim() || null;
+    if (showPrice && !catalogUnitPrice.safeParse(price).success)
+      invalid.unitPrice = copy.invalidUnitPrice;
     const attributeValues = values.map(({ attribute, value }) => {
       const normalized = typeof value === 'string' ? value.trim() : value;
       const key = String(attribute.id);
@@ -265,6 +273,7 @@ function ItemForm({
       nodeId: path.at(-1)?.id,
       unitId,
       attributeValues,
+      unitPrice: showPrice ? price : undefined,
       isActive: !item && !active ? false : undefined,
     });
     setErrors(invalid);
@@ -350,6 +359,22 @@ function ItemForm({
               <bdi className="wrap-anywhere">{pathLabel(path)}</bdi>
             </Button>
           </div>
+          {showPrice && (
+            <Field
+              label={copy.unitPriceField}
+              hint={copy.unitPriceHint}
+              error={errors.unitPrice}
+            >
+              {(props) => (
+                <NumberInput
+                  {...props}
+                  name="unitPrice"
+                  value={unitPrice}
+                  onValueChange={setUnitPrice}
+                />
+              )}
+            </Field>
+          )}
           <div className="sm:col-span-2">
             <Field label={admin.description} error={errors.description}>
               {(props) => (

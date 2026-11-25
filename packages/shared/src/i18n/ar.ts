@@ -263,6 +263,10 @@ export const purchasingUi = {
   queue: 'طلبات المشتريات',
   description: 'تابع طلبات الأسعار والتسعير',
   emptyQueue: 'مفيش طلبات مستنية المشتريات دلوقتي.',
+  views: 'عرض طلبات المشتريات',
+  allRequests: 'كل الطلبات',
+  needsAction: 'محتاج إجراء',
+  emptyWorkspace: 'مفيش طلبات في مواقعك لسه.',
   modes: 'شغل المشتريات',
   rfq: 'طلب الأسعار',
   pricing: 'التسعير',
@@ -583,6 +587,15 @@ export const masterData = {
   nonemptyDetail:
     'المجلد فيه مجموعات أو أصناف. ممكن توقفه عشان يختفي من الاختيارات.',
   latestPrice: 'آخر سعر شراء',
+  unitPrice: 'سعر الوحدة',
+  unitPriceField: 'سعر الوحدة (ج.م)',
+  unitPriceHint:
+    'سعر مرجعي بتكتبه بنفسك، منفصل عن آخر سعر شراء. سيبه فاضي لو مش معروف، واكتب 0 لو السعر صفر فعلًا.',
+  invalidUnitPrice:
+    'اكتب سعر من 0 لحد 999999999999.99 بمنزلتين عشريتين كحد أقصى.',
+  unitPriceUnset: 'مش محدد',
+  unitPriceForbidden: 'تعديل سعر الوحدة محتاج صلاحية رؤية الأسعار',
+  unitPriceForbiddenFix: 'احفظ الصنف من غير سعر أو اطلب صلاحية رؤية الأسعار.',
   priceDate: 'تاريخ الشراء',
   priceRequest: 'طلب الشراء',
   priceSupplier: 'المورد',
@@ -719,6 +732,31 @@ export const admin = {
     deactivateDetail: 'الموقع هيبقى غير متاح للإسناد الجديد.',
     saved: 'الموقع اتحفظ.',
     deactivated: 'الموقع اتوقف.',
+    engineers: 'مهندسين الموقع',
+    engineersHint:
+      'ابحث بالاسم أو اسم المستخدم وحدد المهندسين. شيل المهندس من هنا مش بيلغي إسناده لمواقعه التانية.',
+    searchEngineers: 'ابحث عن مهندس',
+    noEngineers: 'مفيش مهندسين مسندين للموقع.',
+    noCandidates: 'مفيش مهندسين متاحين للإسناد.',
+    noCandidateMatches: 'مفيش مهندسين مطابقين للبحث.',
+    assign: (name: string) => `أسند ${name}`,
+    unassign: (name: string) => `شيل ${name}`,
+    alsoAt: (names: string) => `مسند كمان لـ: ${names}`,
+    outOfReach: 'خارج صلاحياتك',
+    inactiveSite: 'الموقع موقوف، فمينفعش تسند له مهندسين جدد.',
+    errors: {
+      invalidEngineers: 'مهندس غير متاح',
+      invalidEngineersFix: 'اختار من المهندسين النشطين المتاحين لحسابك.',
+      engineerForbidden: 'لا يمكنك تعديل مواقع مستخدم خارج صلاحياتك',
+      engineerForbiddenFix: 'اطلب من مسؤول آخر تعديل إسناد المهندس.',
+      ownSites: 'لا يمكنك تغيير مواقعك',
+      ownSitesFix: 'اطلب من مسؤول آخر تعديل بيانات الوصول لحسابك.',
+      siteOutOfScope: 'لا يمكنك إسناد مهندسين لموقع خارج نطاق مواقعك',
+      siteOutOfScopeFix:
+        'اطلب من مسؤول له صلاحية على كل المواقع إسناد المهندسين.',
+      inactiveSite: 'الموقع موقوف',
+      inactiveSiteFix: 'مينفعش تسند مهندسين جدد لموقع موقوف.',
+    },
   },
 } as const;
 

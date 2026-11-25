@@ -36,7 +36,7 @@ export function HomePage() {
             {available.map((item) => (
               <li key={item.id}>
                 <Link
-                  className="flex h-full items-center gap-3 rounded-panel border border-seam bg-paper p-4 hover:border-concrete hover:bg-neutral-bg"
+                  className="flex h-full items-center gap-3 rounded-panel border border-seam bg-paper p-4 transition-colors hover:border-concrete hover:bg-plaster"
                   to={item.path}
                 >
                   <span className="grid size-target shrink-0 place-items-center rounded-control bg-plaster">

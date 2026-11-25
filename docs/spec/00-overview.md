@@ -57,7 +57,7 @@ Roles are created in the role editor, never in code (see `01-access-control.md`)
 
 ## Out of scope for v1
 
-Printing and PDFs; uploading supplier quotes and OCR; automatic WhatsApp sending (Business API); images sent to suppliers; supplier payments and accounts; budgets; site inventory; comments on requests; dark mode; sound or browser-push notifications; importing users; multi-company tenancy.
+Printing and PDFs; uploading supplier quotes and OCR; automatic WhatsApp sending (Business API); images sent to suppliers; supplier payments and accounts; budgets; site inventory; comments on requests; sound or browser-push notifications; importing users; multi-company tenancy.
 
 ## Spec index
 

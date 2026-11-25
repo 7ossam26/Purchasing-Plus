@@ -1,9 +1,13 @@
 import { ar } from '@purchasing-plus/shared/i18n/ar';
 import { Toaster, toast } from 'sonner';
 
+import { useTheme } from '../../lib/theme.js';
+
 export function Toast() {
+  const { theme } = useTheme();
   return (
     <Toaster
+      theme={theme}
       dir="rtl"
       position="top-center"
       duration={4000}

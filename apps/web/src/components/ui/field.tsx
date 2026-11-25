@@ -59,7 +59,7 @@ export function Field({
   );
 }
 const control =
-  'w-full min-w-0 min-h-target rounded-control border border-concrete bg-paper px-3 py-2 text-body text-ink aria-invalid:border-danger-fg disabled:bg-plaster';
+  'w-full min-w-0 min-h-target rounded-control border border-concrete bg-paper px-3 py-2 text-body text-ink transition-[border-color] focus-visible:border-ppr aria-invalid:border-danger-fg disabled:bg-plaster';
 export function Input({ className = '', ...props }: ComponentProps<'input'>) {
   return <input {...props} className={control + ' ' + className} />;
 }

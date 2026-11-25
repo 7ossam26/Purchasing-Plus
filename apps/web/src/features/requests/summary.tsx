@@ -14,7 +14,7 @@ import {
   statusMap,
   type DisplayedStage,
 } from '@purchasing-plus/shared/lifecycle';
-import { Check, X } from 'lucide-react';
+import { Check, Layers, MapPin, Truck, UserRound, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { useCanOnSite } from '../../app/session.js';
@@ -116,7 +116,7 @@ export function StageRail({
         <button
           type="button"
           onClick={onJump}
-          className="flex min-h-target flex-wrap items-center gap-x-2 rounded-control text-start after:absolute after:inset-0 after:rounded-panel hover:bg-plaster"
+          className="flex min-h-target flex-wrap items-center gap-x-2 rounded-control text-start transition-colors after:absolute after:inset-0 after:rounded-panel hover:bg-plaster"
         >
           <RailCaption stage={stage} at={at} />
         </button>
@@ -163,14 +163,25 @@ export function RequestFacts({
     isAging(request.stageStartedAt, new Date(), agingDays);
   return (
     <div className="grid min-w-0 gap-2">
-      <ul className="flex flex-wrap gap-x-2 gap-y-1 text-small text-concrete">
-        {[request.site.name, request.category.name, request.creator.name].map(
-          (name, index) => (
-            <li key={index} className="min-w-0 wrap-anywhere">
-              <bdi>{name}</bdi>
-            </li>
-          ),
-        )}
+      {/* Site, category and creator, each led by its glyph so neighbouring names never run together. */}
+      <ul className="flex flex-wrap gap-x-3 gap-y-1 text-small text-concrete">
+        {(
+          [
+            [MapPin, request.site.name],
+            [Layers, request.category.name],
+            [UserRound, request.creator.name],
+          ] as const
+        ).map(([Icon, name], index) => (
+          <li key={index} className="flex min-w-0 items-start gap-1">
+            <Icon
+              className="mt-1 shrink-0"
+              size={14}
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            <bdi className="min-w-0 wrap-anywhere">{name}</bdi>
+          </li>
+        ))}
       </ul>
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusChip status={request.displayedStage} />
@@ -292,9 +303,14 @@ export function ItemRows({
                   </p>
                 )}
               </div>
-              <span className="shrink-0 text-small font-bold">
-                <bdi className="numeric">{formatNumber(line.quantity)}</bdi>{' '}
-                <bdi>{line.snapshot.unitName}</bdi>
+              {/* Quantity and unit read as one value, end-aligned in every row. */}
+              <span className="flex shrink-0 items-baseline gap-1 rounded-control bg-plaster px-2 py-0.5">
+                <bdi className="numeric text-subtitle font-bold">
+                  {formatNumber(line.quantity)}
+                </bdi>
+                <bdi className="text-small font-semibold">
+                  {line.snapshot.unitName}
+                </bdi>
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -304,21 +320,24 @@ export function ItemRows({
                   {line.supplierName}
                 </bdi>
               )}
-              {canViewPrices && line.lineTotal && (
-                <span className="text-small">
-                  {copy.price} <bdi>{formatMoney(line.lineTotal)}</bdi>
-                </span>
-              )}
               {line.isOther && convert && (
                 <button
                   type="button"
                   onClick={() => convert(line.id)}
-                  className="min-h-target rounded-control px-2 text-small font-bold text-ppr-deep underline hover:bg-ppr-wash"
+                  className="min-h-target rounded-control px-2 text-small font-bold text-ppr-deep underline transition-colors hover:bg-ppr-wash"
                 >
                   {copy.addToCatalog}
                 </button>
               )}
               {renderActions?.(line)}
+              {canViewPrices && line.lineTotal && (
+                <span className="ms-auto flex items-baseline gap-2">
+                  <span className="text-micro text-concrete">{copy.price}</span>
+                  <bdi className="numeric text-small font-bold">
+                    {formatMoney(line.lineTotal)}
+                  </bdi>
+                </span>
+              )}
             </div>
             {line.state === 'REJECTED' && reasons.get(line.id) && (
               <p className="whitespace-pre-wrap wrap-anywhere text-small text-danger-fg">
@@ -345,8 +364,20 @@ export function ItemRows({
         </Button>
       )}
       {canViewPrices && request.deliveryFee && (
-        <p className="rounded-control border border-seam bg-paper p-3 text-small">
-          {copy.deliveryFee} <bdi>{formatMoney(request.deliveryFee)}</bdi>
+        // The fee is never part of a total: its own dashed row, amount in the totals column.
+        <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-control border border-dashed border-concrete/60 bg-paper px-3 py-2.5 text-small sm:px-4">
+          <span className="flex items-center gap-2 font-semibold">
+            <Truck
+              className="shrink-0 text-concrete"
+              size={18}
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            {copy.deliveryFee}
+          </span>
+          <bdi className="numeric font-bold">
+            {formatMoney(request.deliveryFee)}
+          </bdi>
         </p>
       )}
     </div>

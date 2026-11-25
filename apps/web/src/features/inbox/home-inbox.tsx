@@ -57,10 +57,10 @@ function QueueRows({
                   ? '?tab=receipt'
                   : '')
             }
-            className="flex min-h-target items-center gap-3 rounded-control p-3 hover:bg-plaster sm:p-4"
+            className="flex min-h-target items-center gap-3 rounded-control p-3 transition-colors hover:bg-plaster sm:p-4"
           >
             <div className="grid min-w-0 flex-1 gap-1">
-              <span className="text-subtitle">
+              <span className="text-subtitle font-bold">
                 {request.number ? (
                   <bdi dir="ltr" className="numeric">
                     {request.number}

@@ -6,6 +6,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 
 import { createQueryClient } from './app/query.js';
 import { routes } from './app/routes.js';
+import { initTheme } from './lib/theme.js';
 import '@fontsource-variable/cairo';
 import 'sonner/dist/styles.css';
 import './styles/base.css';
@@ -13,6 +14,7 @@ import './styles/base.css';
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing root element');
 document.title = ar.appName;
+initTheme();
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={createQueryClient()}>

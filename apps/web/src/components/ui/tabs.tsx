@@ -22,14 +22,17 @@ type TabsProps = { label: string } & (
     }
   | { variant: 'route'; tabs: readonly RouteTab[] }
 );
+// Selected = accent wash plus a solid accent edge, so the open tab reads at a glance in sunlight.
 const tabClass =
-  'inline-flex min-h-target min-w-target shrink-0 items-center justify-center gap-2 rounded-control px-3 py-2 text-small font-semibold hover:bg-plaster aria-selected:bg-ppr-wash aria-selected:text-ppr-deep aria-[current=page]:bg-ppr-wash aria-[current=page]:text-ppr-deep';
+  'group/tab inline-flex min-h-target min-w-target shrink-0 items-center justify-center gap-2 rounded-control px-3 py-2 text-small font-semibold text-concrete transition-[background-color,color,box-shadow] hover:bg-plaster hover:text-ink ' +
+  'aria-selected:bg-ppr-wash aria-selected:font-bold aria-selected:text-ppr-deep aria-selected:shadow-[inset_0_-3px_0_var(--color-ppr)] ' +
+  'aria-[current=page]:bg-ppr-wash aria-[current=page]:font-bold aria-[current=page]:text-ppr-deep aria-[current=page]:shadow-[inset_0_-3px_0_var(--color-ppr)]';
 function Label({ label, count }: TabLabel) {
   return (
     <>
       {label}
       {count !== undefined && (
-        <bdi className="numeric rounded-full bg-neutral-bg px-2 text-micro text-neutral-fg">
+        <bdi className="numeric rounded-full bg-neutral-bg px-2 text-micro text-neutral-fg group-aria-selected/tab:bg-ppr group-aria-selected/tab:text-paper group-aria-[current=page]/tab:bg-ppr group-aria-[current=page]/tab:text-paper">
           {formatNumber(count)}
         </bdi>
       )}

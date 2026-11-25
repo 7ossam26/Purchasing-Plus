@@ -1,15 +1,50 @@
 import { ar } from '@purchasing-plus/shared/i18n/ar';
-import { KeyRound, LogOut, UserRound } from 'lucide-react';
+import { KeyRound, LogOut, Monitor, Moon, Sun, UserRound } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
 import { useNavigate } from 'react-router';
 
 import { Button } from '../../components/ui/button.js';
+import { SegmentedChoice } from '../../components/ui/choice.js';
 import { useConfirm } from '../../components/ui/dialogs.js';
 import { Field, Input } from '../../components/ui/field.js';
 import { Modal } from '../../components/ui/modal.js';
 import { toast, toastError } from '../../components/ui/toast.js';
 import { ApiError } from '../../lib/api/client.js';
+import {
+  setThemePreference,
+  themePreferences,
+  useTheme,
+  type ThemePreference,
+} from '../../lib/theme.js';
 import { useSession } from '../session.js';
+
+const themeIcons = { system: Monitor, light: Sun, dark: Moon };
+function AppearanceChoice() {
+  const { preference } = useTheme();
+  return (
+    <SegmentedChoice
+      label={ar.appearance.title}
+      hint={ar.appearance.hint}
+      value={preference}
+      onChange={(value) => setThemePreference(value as ThemePreference)}
+      options={themePreferences.map((id) => {
+        const Icon = themeIcons[id];
+        return {
+          value: id,
+          label: ar.appearance[id],
+          icon: (
+            <Icon
+              className="shrink-0"
+              size={18}
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+          ),
+        };
+      })}
+    />
+  );
+}
 
 export function AccountMenu() {
   const { profile, logout } = useSession();
@@ -75,6 +110,9 @@ export function AccountMenu() {
                   <bdi>{identity}</bdi>
                 </p>
               )}
+            </div>
+            <div className="border-b border-seam pb-4">
+              <AppearanceChoice />
             </div>
             <div className="grid gap-2">
               <Button

@@ -4,6 +4,7 @@ import {
   purchasingUi as buying,
 } from '@purchasing-plus/shared/i18n/ar';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 import { useCanOnSite } from '../../app/session.js';
@@ -29,6 +30,7 @@ export function PricingRounds({ request }: { request: RequestDto }) {
       {rounds.map((round) => (
         <details
           key={round.number}
+          className="group/round"
           open={expanded === round.number}
           onToggle={(event) => {
             const open = event.currentTarget.open;
@@ -41,9 +43,15 @@ export function PricingRounds({ request }: { request: RequestDto }) {
             );
           }}
         >
-          <summary className="min-h-target cursor-pointer py-2 font-semibold">
+          <summary className="flex min-h-target cursor-pointer items-center gap-2 rounded-control py-2 font-semibold transition-colors hover:bg-plaster">
+            <ChevronDown
+              size={18}
+              strokeWidth={1.75}
+              aria-hidden="true"
+              className="shrink-0 text-concrete transition-transform group-open/round:rotate-180"
+            />
             {copy.round(formatNumber(round.number))}
-            <span className="ms-2 text-small font-normal text-concrete">
+            <span className="text-small font-normal text-concrete">
               {copy.roundStatus[round.status]}
             </span>
           </summary>
@@ -83,19 +91,17 @@ function RoundDetails({
                   </bdi>
                 )}
                 {canViewPrices && line.lineTotal !== undefined && (
-                  <p className="text-small">
-                    {copy.lineTotal}{' '}
-                    <bdi className="font-bold">
-                      {formatMoney(line.lineTotal)}
-                    </bdi>
+                  <p className="flex flex-wrap items-baseline justify-between gap-x-3 text-small">
+                    <span className="flex items-baseline gap-2">
+                      <span className="text-concrete">{copy.lineTotal}</span>
+                      <bdi className="numeric font-bold">
+                        {formatMoney(line.lineTotal)}
+                      </bdi>
+                    </span>
                     {line.unitPrice !== undefined && (
-                      <>
-                        {' '}
-                        ·{' '}
-                        <bdi>
-                          {buying.unitPrice(formatMoney(line.unitPrice))}
-                        </bdi>
-                      </>
+                      <bdi className="numeric text-concrete">
+                        {buying.unitPrice(formatMoney(line.unitPrice))}
+                      </bdi>
                     )}
                   </p>
                 )}
@@ -118,17 +124,18 @@ function RoundDetails({
           </ul>
           {canViewPrices && data.roundTotal !== undefined && (
             <dl className="grid gap-1 border-t border-seam pt-2">
-              <div className="flex flex-wrap justify-between gap-x-2 font-bold">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2 font-bold">
                 <dt>{buying.roundTotal}</dt>
-                <dd>
+                <dd className="numeric text-subtitle">
                   <bdi>{formatMoney(data.roundTotal)}</bdi>
                 </dd>
               </div>
-              <div className="flex flex-wrap justify-between gap-x-2 text-small">
+              {/* The fee is shown beside the total, never added to it. */}
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-small text-concrete">
                 <dt>
                   {buying.deliveryFee} · {buying.separateFee}
                 </dt>
-                <dd>
+                <dd className="numeric font-semibold text-ink">
                   <bdi>{formatMoney(data.deliveryFee ?? '0.00')}</bdi>
                 </dd>
               </div>

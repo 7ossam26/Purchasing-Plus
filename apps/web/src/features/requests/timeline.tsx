@@ -250,7 +250,7 @@ function BatchDetails({
         <ChevronDown
           size={16}
           aria-hidden="true"
-          className="shrink-0 group-open:rotate-180"
+          className="shrink-0 transition-transform group-open:rotate-180"
         />
       </summary>
       <div className="grid gap-3 border-t border-seam p-3 text-small">

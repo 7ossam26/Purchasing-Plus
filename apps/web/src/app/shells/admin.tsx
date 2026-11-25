@@ -25,7 +25,7 @@ function AdminItem({
     <NavLink
       to={item.path}
       onClick={onNavigate}
-      className="flex min-h-target items-center gap-3 rounded-control px-3 py-2 text-small font-semibold hover:bg-paper/10 aria-[current=page]:bg-paper aria-[current=page]:text-ink"
+      className="flex min-h-target items-center gap-3 rounded-control px-3 py-2 text-small font-semibold transition-colors hover:bg-console-fg/10 aria-[current=page]:bg-console-fg aria-[current=page]:text-console"
     >
       <ModuleIcon name={item.icon} />
       {item.label}
@@ -45,13 +45,13 @@ function AdminNavigation({ onNavigate }: { onNavigate?: () => void }) {
           <AdminItem key={item.id} item={item} onNavigate={onNavigate} />
         ))}
       {canViewSites && (
-        <div className="mt-3 border-t border-paper/20 pt-3">
+        <div className="mt-3 border-t border-console-fg/20 pt-3">
           <h3 className="px-3 text-small font-semibold">{masterData.label}</h3>
           <AdminItem item={sites} onNavigate={onNavigate} />
         </div>
       )}
       {profile?.isSuperadmin && (
-        <div className="mt-3 border-t border-paper/20 pt-3">
+        <div className="mt-3 border-t border-console-fg/20 pt-3">
           <h3 className="px-3 text-small font-semibold">{ar.auth.support}</h3>
           {modules
             .filter((item) => item.kind === 'support')
@@ -82,10 +82,14 @@ export function AdminShell() {
         }
       />
       <div className="grid min-h-[calc(100dvh-var(--spacing-topbar))] md:grid-cols-[15rem_minmax(0,1fr)]">
-        <aside className="hidden bg-ink px-3 py-4 text-paper md:block">
+        <aside className="hidden border-e border-seam bg-console px-3 py-4 text-console-fg md:block">
           <div className="sticky top-topbar">
-            <Link to="/" className="flex min-h-target items-center px-3">
-              <Logo />
+            <Link
+              to="/"
+              className="flex min-h-target items-center rounded-control px-3"
+              aria-label={`${ar.common.home} – ${ar.brandName}`}
+            >
+              <Logo size="sidebar" />
             </Link>
             <h2 className="my-3 px-3 text-small font-semibold">
               {ar.navigation.admin}

@@ -150,10 +150,10 @@ export function RequestsPage() {
                   <li key={request.id}>
                     <Link
                       to={requestHref(request.id)}
-                      className="flex min-h-target items-center gap-3 px-3 py-3 hover:bg-neutral-bg sm:px-4"
+                      className="flex min-h-target items-center gap-3 px-3 py-3 transition-colors hover:bg-plaster sm:px-4"
                     >
                       <div className="grid min-w-0 grow gap-1">
-                        <span className="numeric text-subtitle">
+                        <span className="numeric text-subtitle font-bold">
                           {request.number ? (
                             <bdi dir="ltr">{request.number}</bdi>
                           ) : (

@@ -18,6 +18,12 @@
   --color-distinct-bg: #f1ecf8;
   --color-danger-fg: #b42318;
   --color-danger-bg: #fcebe9;
+  /* Admin console sidebar and drawer: "clearly a different place" in both themes. */
+  --color-console: #000000;
+  --color-console-fg: #ffffff;
+  /* Switches: off is a dim track with a light knob in both themes; on fills with ppr. */
+  --color-switch-off: #4a4d47;
+  --color-switch-knob: #ffffff;
   --color-backdrop: rgb(0 0 0 / 40%);
   --shadow-overlay: 0 12px 32px rgb(0 0 0 / 14%);
   --radius-control: 8px;
@@ -46,4 +52,41 @@
   --text-micro: 12px;
   --text-micro--line-height: 18px;
   --text-micro--font-weight: 600;
+  /* Feedback motion (press, disclosure, theme switch): short and settling, never bouncing. */
+  --ease-crisp: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/*
+ * Dark theme: the same semantic roles tuned for dark surfaces. Every utility reads these
+ * variables, so components need no dark-specific classes. "ink" stays the colour that acts
+ * (primary buttons, current stage) and becomes soft near-white; "paper" stays the surface.
+ * All text pairs keep at least 5:1 (status chips 7.5:1 or more).
+ */
+:root[data-theme='dark'] {
+  --color-ink: #eceee8;
+  --color-paper: #1d201c;
+  --color-plaster: #111310;
+  --color-concrete: #a6aaa0;
+  --color-seam: #3a3e36;
+  --color-ppr: #3fae7d;
+  --color-ppr-deep: #80d5aa;
+  --color-ppr-wash: #1a3a2a;
+  --color-neutral-fg: #c9ccc3;
+  --color-neutral-bg: #2d302a;
+  --color-pending-fg: #f0c36a;
+  --color-pending-bg: #3a2e13;
+  --color-info-fg: #aac9e7;
+  --color-info-bg: #1d2c3a;
+  --color-distinct-fg: #cfb8f5;
+  --color-distinct-bg: #302743;
+  --color-danger-fg: #ff9f94;
+  --color-danger-bg: #401e1a;
+  --color-console: #0a0b09;
+  --color-console-fg: #eceee8;
+  --color-switch-off: #50544c;
+  --color-switch-knob: #eceee8;
+  --color-backdrop: rgb(0 0 0 / 62%);
+  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 55%);
 }

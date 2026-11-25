@@ -21,6 +21,8 @@ import {
 } from 'chart.js';
 import { Chart } from 'react-chartjs-2';
 
+import { useTheme } from '../../lib/theme.js';
+
 ChartJS.register(
   BarController,
   BarElement,
@@ -34,6 +36,8 @@ ChartJS.register(
 );
 
 export function ReportPlot({ chart }: { chart: ReportChart }) {
+  // Colours come from the theme tokens; re-render (and re-read them) when the theme switches.
+  useTheme();
   const styles = getComputedStyle(document.documentElement);
   const timeline = chart.type === 'line';
   const color = (token: string) =>

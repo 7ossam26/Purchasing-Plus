@@ -35,6 +35,8 @@ Status tones (text on background, all ≥ 5:1):
 
 Status chips always carry a small leading glyph as well as the colour, so status is never colour-only. One `StatusChip` with one status → label + tone + glyph map in `packages/shared`.
 
+**Themes (light and dark).** The tables above are the light theme. A dark theme re-tunes the same semantic tokens under `:root[data-theme='dark']`, so components never carry dark-specific classes. "Black acts, green confirms" still holds: `ink` (the colour that acts) becomes soft near-white `#ECEEE8` on dark surfaces, `paper` `#1D201C`, `plaster` `#111310`, `seam` `#3A3E36`, `concrete` `#A6AAA0`, `ppr` `#3FAE7D`, `ppr-deep` `#80D5AA`, `ppr-wash` `#1A3A2A`; status pairs keep ≥ 7.5:1. Two extra roles: `console` / `console-fg` (the admin sidebar and drawer: black in light, `#0A0B09` in dark) and `switch-off` / `switch-knob` (an off switch is a dim track with a light knob in both themes, so it never reads as on). The choice «المظهر» (حسب الجهاز، فاتح، داكن) lives in the account menu «حسابك». It follows the device until the user picks one, remembers an explicit choice on that device, applies before first paint (`public/theme-init.js`) and stays in sync across open tabs. `theme-color` follows the top-bar surface.
+
 **Type.** Cairo variable font, self-hosted with `@fontsource-variable/cairo` (bundled by Vite; no CDN). One family for everything. `font-variant-numeric: tabular-nums` on every number column, money and counter.
 
 | Style | Size / line height | Weight |
@@ -54,15 +56,16 @@ Arabic needs the generous line heights above; don't tighten them.
 
 **Icons.** `lucide-react` only, stroke 1.75, 20 px (24 in navigation). Category icons: كهربا `Zap`, صحي `Droplet`, سيراميك `Grid3x3`, دهانات `PaintRoller`, أوكر ومقابض `DoorOpen`; new categories pick from a short curated list in the category editor.
 
-**Logo.** `assets/brand/logo.svg` (uses `currentColor`). Top bar: the mark at 28 px in ink + the wordmark "Purchasing+" in Cairo 800, isolated left-to-right inside the RTL bar. Favicon and PWA icons: white mark on a black square (like `logo-on-black.png`), including a maskable icon. `theme-color` `#FFFFFF`.
+**Logo.** The PLACES lockup `assets/brand/places-logo.svg` (uses `currentColor`, so ink in light and soft white in dark; accessible name «PLACES»). Top bar: the lockup at 28 px tall (32 px from `lg`), isolated left-to-right inside the RTL bar, followed from `sm` up by a divider and the product name "Purchasing+" in `concrete`. The login card shows the lockup at 36 px with the product name. The mark alone (`assets/brand/logo.svg`) stays the favicon and PWA icons: white mark on a black square (like `logo-on-black.png`), including a maskable icon.
 
 ## Motion
 
-Exactly two kinds:
+Exactly three kinds:
 1. **Folder navigation** in the explorer (below), using the View Transitions API through React Router's `viewTransition`.
-2. **Overlays** (sheets slide up 200 ms, dialogs fade/scale 150 ms) and expand/collapse that shows what changed.
+2. **Overlays** (sheets slide up 200 ms, dialogs fade/scale 150 ms) and expand/collapse that shows what changed (disclosure chevrons rotate 150 ms).
+3. **Interaction feedback**, 120–200 ms: colour transitions on hover, press and selection; buttons settle to 98 % scale while pressed; switching the theme cross-fades colours for 180 ms.
 
-Nothing animates on page load. No hover lifts on cards. Everything is instant under `prefers-reduced-motion`.
+Nothing animates on page load. No hover lifts on cards, no looping or bouncing motion. Everything is instant under `prefers-reduced-motion`.
 
 ## Don'ts
 

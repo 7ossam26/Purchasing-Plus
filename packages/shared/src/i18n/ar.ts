@@ -164,6 +164,15 @@ export const ar = {
     support: 'الدعم الفني',
   },
   appName: 'Purchasing+',
+  // The company brand shown in the logo; its accessible name matches the visible lettering.
+  brandName: 'PLACES',
+  appearance: {
+    title: 'المظهر',
+    hint: 'اختيارك بيتحفظ على الجهاز ده.',
+    system: 'حسب الجهاز',
+    light: 'فاتح',
+    dark: 'داكن',
+  },
   common: {
     back: 'رجوع',
     home: 'الرئيسية',

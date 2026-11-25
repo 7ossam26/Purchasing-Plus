@@ -95,11 +95,11 @@ export function PurchasingPage() {
                           ? '?tab=purchasing'
                           : '')
                       }
-                      className="flex min-h-target items-center gap-3 rounded-control p-3 hover:bg-plaster sm:p-4"
+                      className="flex min-h-target items-center gap-3 rounded-control p-3 transition-colors hover:bg-plaster sm:p-4"
                     >
                       <div className="grid min-w-0 flex-1 gap-1">
                         <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                          <span className="numeric text-subtitle">
+                          <span className="numeric text-subtitle font-bold">
                             {request.number ? (
                               <bdi dir="ltr">{request.number}</bdi>
                             ) : (

@@ -6,7 +6,7 @@ import {
   urgencies,
   type Urgency,
 } from '@purchasing-plus/shared/lifecycle';
-import { Minus, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Minus, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '../../components/ui/button.js';
 import { ChipSelect } from '../../components/ui/choice.js';
@@ -275,8 +275,14 @@ export function RequestFields({
             />
           )}
         </Field>
-        <details>
+        <details className="group/note">
           <summary className="flex min-h-target cursor-pointer items-center gap-2 font-semibold text-ppr-deep">
+            <ChevronDown
+              size={18}
+              strokeWidth={1.75}
+              aria-hidden="true"
+              className="shrink-0 transition-transform group-open/note:rotate-180"
+            />
             {form.note ? copy.note : copy.addNote}
           </summary>
           <Textarea

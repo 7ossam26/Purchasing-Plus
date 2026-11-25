@@ -59,9 +59,9 @@ export function PurchaseLineTitle({
           {line.specs}
         </bdi>
       )}
-      <span className="text-small text-concrete">
-        <bdi className="numeric">{formatNumber(line.quantity)}</bdi>{' '}
-        <bdi>{line.snapshot.unitName}</bdi>
+      <span className="text-small">
+        <bdi className="numeric font-bold">{formatNumber(line.quantity)}</bdi>{' '}
+        <bdi className="font-semibold">{line.snapshot.unitName}</bdi>
       </span>
     </span>
   );
@@ -407,9 +407,13 @@ function PricingLine({
         </>
       ) : (
         line.lineTotal && (
-          <div className="flex flex-wrap gap-2 text-small">
-            {line.supplierName && <bdi>{line.supplierName}</bdi>}
-            <bdi>{formatMoney(line.lineTotal)}</bdi>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 text-small">
+            {line.supplierName && (
+              <bdi className="text-concrete">{line.supplierName}</bdi>
+            )}
+            <bdi className="numeric ms-auto font-bold">
+              {formatMoney(line.lineTotal)}
+            </bdi>
           </div>
         )
       )}
@@ -553,9 +557,13 @@ export function PricingMode({
         ) : (
           data.deliveryFee !== null &&
           data.deliveryFee !== undefined && (
-            <p className="text-small">
-              {copy.deliveryFee} · {copy.separateFee}{' '}
-              <bdi>{formatMoney(data.deliveryFee)}</bdi>
+            <p className="flex flex-wrap items-baseline justify-between gap-x-2 text-small text-concrete">
+              <span>
+                {copy.deliveryFee} · {copy.separateFee}
+              </span>
+              <bdi className="numeric font-semibold text-ink">
+                {formatMoney(data.deliveryFee)}
+              </bdi>
             </p>
           )
         )}

@@ -17,13 +17,18 @@ function Action({
   action,
   variant,
   fullWidth,
+  grow,
 }: {
   action: BarAction;
   variant: ButtonVariant;
   fullWidth?: boolean;
+  grow?: boolean;
 }) {
+  // On phones the primary takes the free width of its row: same place, bigger target.
   return (
-    <div className={`grid gap-1 ${fullWidth ? 'w-full sm:w-auto' : ''}`}>
+    <div
+      className={`grid gap-1 ${fullWidth ? 'w-full sm:w-auto' : grow ? 'max-sm:min-w-[45%] max-sm:flex-1' : ''}`}
+    >
       <Button
         variant={action.variant ?? variant}
         loading={action.loading}
@@ -64,6 +69,7 @@ export function ActionBar({
           action={primary}
           variant="primary"
           fullWidth={fullWidthPrimary}
+          grow
         />
       )}
       {secondary.map((action) => (

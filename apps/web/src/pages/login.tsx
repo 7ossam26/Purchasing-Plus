@@ -42,7 +42,7 @@ export function LoginPage() {
   return (
     <div>
       <div className="mb-6 border-b border-seam pb-5">
-        <Logo />
+        <Logo size="hero" product />
       </div>
       <h1 className="mb-5 text-title sm:text-title-wide">{ar.auth.title}</h1>
       <form onSubmit={(event) => void submit(event)} className="grid gap-4">

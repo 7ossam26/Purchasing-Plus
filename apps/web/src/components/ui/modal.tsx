@@ -136,10 +136,10 @@ function Dialog({
       }}
     >
       <section
-        className={`ui-dialog-panel flex min-w-0 flex-col overflow-hidden shadow-overlay ${fullScreen ? 'h-dvh w-full bg-paper' : drawer ? 'h-full w-[min(86vw,320px)] bg-ink text-paper' : detailDrawer ? 'max-h-[90dvh] w-full rounded-t-sheet bg-paper sm:h-full sm:max-h-none sm:max-w-2xl sm:rounded-none' : workspace ? 'h-dvh w-full bg-paper sm:h-auto sm:max-h-[90dvh] sm:max-w-4xl sm:rounded-panel' : 'max-h-[90dvh] w-full rounded-t-sheet bg-paper sm:max-w-lg sm:rounded-panel'}`}
+        className={`ui-dialog-panel flex min-w-0 flex-col overflow-hidden shadow-overlay ${fullScreen ? 'h-dvh w-full bg-paper' : drawer ? 'h-full w-[min(86vw,320px)] bg-console text-console-fg' : detailDrawer ? 'max-h-[90dvh] w-full rounded-t-sheet bg-paper sm:h-full sm:max-h-none sm:max-w-2xl sm:rounded-none' : workspace ? 'h-dvh w-full bg-paper sm:h-auto sm:max-h-[90dvh] sm:max-w-4xl sm:rounded-panel' : 'max-h-[90dvh] w-full rounded-t-sheet bg-paper sm:max-w-lg sm:rounded-panel'}`}
       >
         <header
-          className={`flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-6 ${drawer ? 'border-paper/20' : 'border-seam'}`}
+          className={`flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-6 ${drawer ? 'border-console-fg/20' : 'border-seam'}`}
         >
           <h2
             data-dialog-title
@@ -154,7 +154,6 @@ function Dialog({
             <Button
               variant="ghost"
               iconOnly
-              className={drawer ? 'hover:bg-paper/10' : undefined}
               aria-label={ar.common.close}
               onClick={closeTop}
             >
@@ -166,7 +165,7 @@ function Dialog({
           {description && (
             <p
               id={descriptionId}
-              className={`mb-4 ${drawer ? 'text-paper/80' : 'text-concrete'}`}
+              className={`mb-4 ${drawer ? 'text-console-fg/80' : 'text-concrete'}`}
             >
               {description}
             </p>

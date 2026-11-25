@@ -52,10 +52,10 @@ export function TopBar({
         </div>
         <Link
           to="/"
-          className="inline-flex min-h-target items-center rounded-control"
-          aria-label={ar.common.home + ' – ' + ar.appName}
+          className="inline-flex min-h-target items-center rounded-control px-2"
+          aria-label={`${ar.common.home} – ${ar.brandName} ${ar.appName}`}
         >
-          <Logo />
+          <Logo product="wide" />
         </Link>
         <div className="flex items-center justify-self-end">
           {notificationSlot ?? (canViewRequests && <NotificationBell />)}

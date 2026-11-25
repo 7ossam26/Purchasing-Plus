@@ -4,12 +4,12 @@ import type { ComponentProps } from 'react';
 
 export type ButtonVariant =
   'primary' | 'secondary' | 'danger-outline' | 'ghost';
-// "Black acts": the primary is the one solid ink control on a surface. Secondary outlines are
-// strong enough (about 3:1) to read as buttons in daylight, not as plain panels.
+// "Green acts": the primary is the one solid `action` control on a surface. Secondary outlines
+// are strong enough (about 3:1) to read as buttons in daylight, not as plain panels.
 // (`not-disabled:` also matches links that borrow these classes.)
 const variants: Record<ButtonVariant, string> = {
   primary:
-    'border-ink bg-ink font-bold text-paper not-disabled:hover:bg-neutral-fg',
+    'border-action bg-action font-bold text-action-fg not-disabled:hover:border-action-hover not-disabled:hover:bg-action-hover not-disabled:active:bg-action-hover',
   secondary:
     'border-concrete/70 bg-paper font-semibold text-ink not-disabled:hover:border-concrete not-disabled:hover:bg-plaster',
   'danger-outline':

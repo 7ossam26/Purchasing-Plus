@@ -6,13 +6,14 @@
 
 Purchasing+ serves people standing on construction sites, holding a phone, often in sunlight. The visual language borrows from the site itself: plaster walls, black marking, and the green of PPR water pipes. It is calm, high-contrast and plain, so the two signature moments — the stage rail and the folder explorer — carry the personality.
 
-**Principle: black acts, green confirms.** Black is for things you can do (primary buttons, the current stage). Green is for things that are done, selected or approved (completed stages, selected rows, approvals, focus). Never use green for a button that hasn't happened yet.
+**Principle: green acts, labels confirm.** The primary action on a screen is a solid green button (`action`: `#146B48` with a white label in light, `#63CA95` with a near-black label in dark), and it is the only solid green control there. Done, selected and approved states keep their own treatments, never a solid action fill: completed rail stages carry a checkmark, success chips carry their glyph and label, selected tabs and rows use the pale `ppr-wash` tint (tabs add a `ppr` underline), and focus is a `ppr` ring. Headings and the current stage stay `ink`.
 
 ## Tokens (Tailwind v4 `@theme` in `apps/web/src/styles/tokens.css`)
 
 | Token | Hex | Use |
 |---|---|---|
-| `ink` | `#000000` | Logo, primary buttons, headings, current stage |
+| `ink` | `#000000` | Logo, headings, current stage |
+| `action` / `action-fg` | `#146B48` / `#FFFFFF` | Primary action buttons, e.g. «طلب جديد» (label 6.5:1; hover `action-hover` `#0F5739`, 8.6:1) |
 | `paper` | `#FFFFFF` | Surfaces: panels, sheets, tables |
 | `plaster` | `#F1F2EE` | App background behind surfaces |
 | `concrete` | `#61645D` | Secondary text, icons, placeholders (6.0:1 on paper) |
@@ -35,7 +36,7 @@ Status tones (text on background, all ≥ 5:1):
 
 Status chips always carry a small leading glyph as well as the colour, so status is never colour-only. One `StatusChip` with one status → label + tone + glyph map in `packages/shared`.
 
-**Themes (light and dark).** The tables above are the light theme. A dark theme re-tunes the same semantic tokens under `:root[data-theme='dark']`, so components never carry dark-specific classes. "Black acts, green confirms" still holds: `ink` (the colour that acts) becomes soft near-white `#ECEEE8` on dark surfaces, `paper` `#1D201C`, `plaster` `#111310`, `seam` `#3A3E36`, `concrete` `#A6AAA0`, `ppr` `#3FAE7D`, `ppr-deep` `#80D5AA`, `ppr-wash` `#1A3A2A`; status pairs keep ≥ 7.5:1. Two extra roles: `console` / `console-fg` (the admin sidebar and drawer: black in light, `#0A0B09` in dark) and `switch-off` / `switch-knob` (an off switch is a dim track with a light knob in both themes, so it never reads as on). The choice «المظهر» (حسب الجهاز، فاتح، داكن) lives in the account menu «حسابك». It follows the device until the user picks one, remembers an explicit choice on that device, applies before first paint (`public/theme-init.js`) and stays in sync across open tabs. `theme-color` follows the top-bar surface.
+**Themes (light and dark).** The tables above are the light theme. A dark theme re-tunes the same semantic tokens under `:root[data-theme='dark']`, so components never carry dark-specific classes. The primary action green is tuned separately for charcoal: `action` `#63CA95` with `action-fg` `#0B0D0A` (label 9.7:1; hover `#7FD6A9`). `ink` becomes soft near-white `#ECEEE8` on dark surfaces, `paper` `#1D201C`, `plaster` `#111310`, `seam` `#3A3E36`, `concrete` `#A6AAA0`, `ppr` `#3FAE7D`, `ppr-deep` `#80D5AA`, `ppr-wash` `#1A3A2A`; status pairs keep ≥ 7.5:1. Two extra roles: `console` / `console-fg` (the admin sidebar and drawer: black in light, `#0A0B09` in dark) and `switch-off` / `switch-knob` (an off switch is a dim track with a light knob in both themes, so it never reads as on). The choice «المظهر» (حسب الجهاز، فاتح، داكن) lives in the account menu «حسابك». It follows the device until the user picks one, remembers an explicit choice on that device, applies before first paint (`public/theme-init.js`) and stays in sync across open tabs. `theme-color` follows the top-bar surface.
 
 **Type.** Cairo variable font, self-hosted with `@fontsource-variable/cairo` (bundled by Vite; no CDN). One family for everything. `font-variant-numeric: tabular-nums` on every number column, money and counter.
 
@@ -89,7 +90,7 @@ No gradients, glass or blur effects, coloured shadows, emoji, stock photos or il
 
 ## Mobile patterns
 
-- Primary actions sit in a **sticky bottom action bar** that shows only the actions allowed now (from the shared lifecycle module). One primary (ink), the rest secondary; destructive actions in danger outline; overflow in a «المزيد» sheet.
+- Primary actions sit in a **sticky bottom action bar** that shows only the actions allowed now (from the shared lifecycle module). One primary (solid `action` green), the rest secondary; destructive actions in danger outline; overflow in a «المزيد» sheet.
 - Pickers, reasons and confirmations open as **bottom sheets** on phones and dialogs on desktop (one `Modal` primitive, §21 item 1).
 - Reasons are a required textarea in a sheet; the confirm button explains the consequence («رفض الطلب نهائيًا»).
 - Disabled actions show the reason on a line under them (§13 "Disabled with reason").
@@ -99,7 +100,7 @@ No gradients, glass or blur effects, coloured shadows, emoji, stock photos or il
 | Screen | Archetype | Notes |
 |---|---|---|
 | Login | §6 L | Username, password, «دخول»; lockout message names the wait time |
-| Home «محتاج مني» | Queue + hub (§6 G + §6 A) | See 05 |
+| Home «محتاج مني» (heading: `Welcome {label}`) | Queue + hub (§6 G + §6 A) | See 05 |
 | New request | Guided workspace (§6 E), simplified for phones | Below |
 | Request page | Entity detail (§6 I) | Below |
 | Catalog explorer (picker and التكويدات) | Custom | Below |

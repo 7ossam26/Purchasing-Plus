@@ -415,3 +415,21 @@ Each decision is pinned by a test in `fulfilment/migration.test.ts`. The spendin
 - Physical iPhone/Android checks, Windows high-contrast mode and screen-reader passes were not run.
 
 **Open questions.** (1) Confirm the product name "Purchasing+" should stay next to the PLACES logo from `sm` up (hidden on phones to keep the bar uncrowded). (2) Confirm the light theme keeps pure black `ink` for body text (spec value) rather than a softer near-black.
+
+## Follow-up — green primary actions, home greeting and theme shortcut (2026-11-25)
+
+**Built.**
+- **Green primary actions.** New semantic tokens `action`, `action-hover` and `action-fg` in `apps/web/src/styles/tokens.css`. Light: `#146B48` with a white label (6.5:1; hover `#0F5739`, 8.6:1). Dark: `#63CA95` with `#0B0D0A` (9.7:1; hover `#7FD6A9`, 11.2:1). The `primary` button variant uses them, so every primary (including «طلب جديد», the action bars and dialogs) changed at once. The pressed state uses the hover fill plus the existing 0.98 scale. Focus stays the `ppr` ring (4.7:1 on light plaster, 6.7:1 on dark). Selected tabs keep the pale tint and underline, completed rail stages their checkmarks, status chips their glyphs. Headings, the current rail stage and the PLACES logo stay `ink`.
+- **Greeting.** The visible home heading «محتاج مني» is now `Welcome {label}` (template `liveUi.welcome` in `ar.ts`, intentionally English). `{label}` is the signed-in account's `user.username` from `/me`, else `user.name`, else the plain `Welcome` (`liveUi.welcomeFallback`). The greeting reads the session profile directly, so nothing is cached between accounts. It is a left-to-right `bdi` with the label in its own `bdi`, right-aligned and wrapping inside the heading. The inbox region keeps the accessible name «محتاج مني» and so do its tabs. The spaces sit outside the `lang="en"` span because jsdom's accessible-name computation trimmed them («Welcomesuperadmin»).
+- **Theme shortcut.** `components/ui/theme-toggle.tsx` is a neutral outlined icon button: moon «تفعيل الوضع الداكن» in light, sun «تفعيل الوضع الفاتح» in dark (`appearance.switchToDark` / `switchToLight`). One tap saves the opposite of the displayed theme as an explicit choice through the existing `lib/theme.ts` store, so it agrees with «المظهر» in the account menu, reloads and other tabs.
+- **Heading row.** A grid with left-to-right order «طلب جديد» → toggle → greeting. «إضافة موقع» (for `sites.create`) keeps its place beside «طلب جديد», to its left from `sm` up. On phones it drops under «طلب جديد» so the greeting keeps the width.
+
+**Decisions.** The label is the username, the account identifier the app exposes (the bootstrap superadmin's is `admin`). The greeting never reads roles or permissions. The second home action stays in the row on wide screens rather than moving elsewhere.
+
+**Specs.** 07 now states "green acts, labels confirm", adds the `action` token row and dark values, and says one primary (solid `action` green) per action bar. 05 describes the heading row, the greeting and the shortcut.
+
+**Tests.** New `apps/web/src/features/inbox/greeting.test.tsx` (5 tests): username greeting replacing the old heading while the region keeps its name, fallback to display name and then `Welcome`, long Latin and Arabic labels kept whole and isolated, the row's source order, and a real sign-out and sign-in as another account with the second `/me` held open (the first account's label never appears). `app/shells/theme.test.tsx` gains 3 toggle tests: one-tap switch and save with the menu agreeing, «حسب الجهاز» to the opposite explicit choice and back to following the device, and sync across navigation, reload and another tab. Swapping username and display-name priority made 4 greeting tests fail. No existing assertion changed.
+
+**Verification.** Chromium at 360 px and 1280 px in both themes with the same seeded data for `eng`, `admin`, a superadmin named `superadmin` and `procurement.coordinator.new-cairo` (Arabic display name «م. عبد الرحمن محمد إبراهيم الشناوي»). At 360 px the row measured «طلب جديد» 16–147, toggle 155–199 (44 px), greeting 207–344, with no horizontal overflow (also none at 320 px, where «superadmin» breaks inside the word). Keyboard focus and hover were checked on the toggle and «طلب جديد».
+
+**Not committed.** The user asked not to commit this follow-up.

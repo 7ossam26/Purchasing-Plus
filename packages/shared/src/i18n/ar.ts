@@ -172,6 +172,9 @@ export const ar = {
     system: 'حسب الجهاز',
     light: 'فاتح',
     dark: 'داكن',
+    // One-tap shortcut on the home screen: names the theme it will switch to.
+    switchToDark: 'تفعيل الوضع الداكن',
+    switchToLight: 'تفعيل الوضع الفاتح',
   },
   common: {
     back: 'رجوع',
@@ -855,7 +858,11 @@ export const catalogImages = {
   zoomOut: 'تصغير',
 } as const;
 export const liveUi = {
+  // Still names the inbox region and its queue tabs; the visible home heading is the greeting.
   inbox: 'محتاج مني',
+  // Intentionally English. {label} is the signed-in account's username (else display name).
+  welcome: 'Welcome {label}',
+  welcomeFallback: 'Welcome',
   emptyInbox: 'مفيش حاجة مستنياك دلوقتي.',
   emptyNotifications: 'لسه مفيش إشعارات.',
   markAllRead: 'تعليم الكل كمقروء',

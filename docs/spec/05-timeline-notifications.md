@@ -78,6 +78,8 @@ Keep them quiet and useful. No sound, no browser push, no per-role settings.
 
 The home page for every user is their inbox, then the module tiles.
 
+- Heading row, left to right: «طلب جديد» (with any other home action, such as «إضافة موقع», kept beside it), the theme shortcut, then the visible heading, a greeting in English, `Welcome {label}` (template in `ar.ts`). `{label}` is the signed-in account's username, else its display name; with neither it reads `Welcome`. The greeting is isolated left-to-right so Latin and Arabic labels both read correctly, and long labels wrap inside the heading. The inbox region and its tabs keep the name «محتاج مني». On phones a second action drops under «طلب جديد» so the greeting keeps its width.
+- Theme shortcut: a neutral outlined icon button, a moon «تفعيل الوضع الداكن» in light and a sun «تفعيل الوضع الفاتح» in dark. One tap switches to the opposite of the displayed theme and saves that explicit choice, through the same preference as «المظهر» in the account menu (07).
 - Top: the queues from `02-request-lifecycle.md` that apply to this user, as status tabs with counts (DESIGN_SYSTEM §3.3). Default tab = the first non-empty queue.
 - Each row: request number, site, category, urgency badge, «معدّل» / «متأخر» badges, stage chip with per-state counts, time in stage, creator.
 - A prominent «طلب جديد» action for users with `requests.create`.

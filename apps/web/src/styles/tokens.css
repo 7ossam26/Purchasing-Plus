@@ -18,6 +18,10 @@
   --color-distinct-bg: #f1ecf8;
   --color-danger-fg: #b42318;
   --color-danger-bg: #fcebe9;
+  /* Primary actions: solid green with a white label (6.5:1; hover 8.6:1). */
+  --color-action: #146b48;
+  --color-action-hover: #0f5739;
+  --color-action-fg: #ffffff;
   /* Admin console sidebar and drawer: "clearly a different place" in both themes. */
   --color-console: #000000;
   --color-console-fg: #ffffff;
@@ -60,8 +64,8 @@
 
 /*
  * Dark theme: the same semantic roles tuned for dark surfaces. Every utility reads these
- * variables, so components need no dark-specific classes. "ink" stays the colour that acts
- * (primary buttons, current stage) and becomes soft near-white; "paper" stays the surface.
+ * variables, so components need no dark-specific classes. "action" is the green of primary
+ * buttons; "ink" (headings, current stage) becomes soft near-white; "paper" stays the surface.
  * All text pairs keep at least 5:1 (status chips 7.5:1 or more).
  */
 :root[data-theme='dark'] {
@@ -83,6 +87,10 @@
   --color-distinct-bg: #302743;
   --color-danger-fg: #ff9f94;
   --color-danger-bg: #401e1a;
+  /* Lighter green that stands out on charcoal without glowing; near-black label (9.7:1). */
+  --color-action: #63ca95;
+  --color-action-hover: #7fd6a9;
+  --color-action-fg: #0b0d0a;
   --color-console: #0a0b09;
   --color-console-fg: #eceee8;
   --color-switch-off: #50544c;

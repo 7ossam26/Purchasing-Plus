@@ -20,12 +20,42 @@ import { InlineError } from '../../components/shared/record-feedback.js';
 import { Button } from '../../components/ui/button.js';
 import { EmptyState, Skeleton } from '../../components/ui/states.js';
 import { Tabs } from '../../components/ui/tabs.js';
+import { ThemeToggle } from '../../components/ui/theme-toggle.js';
+import type { SessionProfile } from '../../lib/api/auth.js';
 import { inboxKey, liveApi, type InboxQueue } from '../../lib/api/live.js';
 import { settingsApi } from '../../lib/api/settings.js';
 import { SiteDialog } from '../admin/site-dialog.js';
 import { NewRequestDialog } from '../requests/new-request.js';
 import { RequestFacts } from '../requests/summary.js';
 import { requestHref } from '../requests/workspace.js';
+
+/** The account label shown in the greeting: username, else display name, else none. */
+function accountLabel(profile: SessionProfile | null | undefined) {
+  return profile?.user?.username?.trim() || profile?.user?.name?.trim() || '';
+}
+// English by design; isolated left-to-right so Latin and Arabic labels both read correctly.
+function Greeting({ profile }: { profile: SessionProfile | null | undefined }) {
+  const label = accountLabel(profile);
+  if (!label)
+    return (
+      <bdi dir="ltr" lang="en">
+        {copy.welcomeFallback}
+      </bdi>
+    );
+  const [before = '', after = ''] = copy.welcome.split('{label}');
+  // Spaces stay outside the language spans so every accessible-name algorithm keeps them.
+  const lead = before.trimEnd();
+  const tail = after.trimStart();
+  return (
+    <bdi dir="ltr" className="min-w-0 text-end wrap-anywhere">
+      {lead && <span lang="en">{lead}</span>}
+      {lead !== before && ' '}
+      <bdi>{label}</bdi>
+      {tail !== after && ' '}
+      {tail && <span lang="en">{tail}</span>}
+    </bdi>
+  );
+}
 
 function InboxEmpty() {
   return (
@@ -118,25 +148,31 @@ export function HomeInbox() {
     queues.find((queue) => queue.count > 0) ??
     queues[0];
   return (
-    <section aria-labelledby="home-inbox" className="grid min-w-0 gap-3">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="home-inbox" className="text-title sm:text-title-wide">
-          {copy.inbox}
+    // The region keeps its «محتاج مني» name; the visible heading greets the signed-in account.
+    <section aria-label={copy.inbox} className="grid min-w-0 gap-3">
+      {/* Left to right: «طلب جديد» (with any other action beside it) → theme toggle → greeting. */}
+      {/* Phones: a second action drops under «طلب جديد» so the greeting keeps the width. */}
+      <header className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+        <h2 className="row-span-2 flex min-h-target min-w-0 items-center text-title sm:row-span-1 sm:text-title-wide">
+          <Greeting profile={profile} />
         </h2>
-        <div className="flex flex-wrap items-center gap-2">
-          {canCreate && (
-            <Button onClick={() => setCreate(true)}>
-              <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
-              {requestUi.newRequest}
-            </Button>
-          )}
-          {canCreateSite && (
-            <Button variant="secondary" onClick={() => setSiteOpen(true)}>
-              <MapPinPlus size={20} strokeWidth={1.75} aria-hidden="true" />
-              {admin.siteManager.add}
-            </Button>
-          )}
-        </div>
+        <ThemeToggle />
+        {canCreate && (
+          <Button className="whitespace-nowrap" onClick={() => setCreate(true)}>
+            <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
+            {requestUi.newRequest}
+          </Button>
+        )}
+        {canCreateSite && (
+          <Button
+            variant="secondary"
+            className="col-span-2 justify-self-end whitespace-nowrap sm:col-span-1"
+            onClick={() => setSiteOpen(true)}
+          >
+            <MapPinPlus size={20} strokeWidth={1.75} aria-hidden="true" />
+            {admin.siteManager.add}
+          </Button>
+        )}
       </header>
       <InlineError error={inbox.error} retry={() => void inbox.refetch()} />
       {canView && inbox.isPending ? (

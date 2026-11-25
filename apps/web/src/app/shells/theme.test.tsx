@@ -1,6 +1,7 @@
 import { ar } from '@purchasing-plus/shared/i18n/ar';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -155,5 +156,95 @@ describe('appearance', () => {
     expect(shown()).toBe('dark');
     reload();
     expect(shown()).toBe('dark');
+  });
+});
+
+/** The one-tap shortcut on the home screen, named for the theme it switches to. */
+const toggle = (to: 'dark' | 'light') =>
+  screen.findByRole('button', {
+    name:
+      to === 'dark' ? ar.appearance.switchToDark : ar.appearance.switchToLight,
+  });
+function closeMenu() {
+  fireEvent.click(
+    within(screen.getByRole('dialog', { name: ar.auth.userMenu })).getByRole(
+      'button',
+      { name: ar.common.close },
+    ),
+  );
+}
+const checked = async (name: string) =>
+  ((await appearance()).getByRole('radio', { name }) as HTMLInputElement)
+    .checked;
+
+describe('home theme toggle', () => {
+  it('switches the displayed theme in one tap, saves it, and the account menu agrees', async () => {
+    device('light');
+    open();
+    fireEvent.click(await toggle('dark'));
+    expect(shown()).toBe('dark');
+    expect(localStorage.getItem(themeStorageKey)).toBe('dark');
+    // The same button now offers the way back, with the sun icon's label.
+    expect(await toggle('light')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: ar.appearance.switchToDark }),
+    ).toBeNull();
+    expect(await checked(ar.appearance.dark)).toBe(true);
+    closeMenu();
+
+    fireEvent.click(await toggle('light'));
+    expect(shown()).toBe('light');
+    expect(localStorage.getItem(themeStorageKey)).toBe('light');
+    expect(await checked(ar.appearance.light)).toBe(true);
+  });
+
+  it('turns «حسب الجهاز» into the opposite explicit choice and follows the menu back to the device', async () => {
+    const phone = device('dark');
+    open();
+    // Following a dark device: the shortcut offers light.
+    fireEvent.click(await toggle('light'));
+    expect(shown()).toBe('light');
+    expect(localStorage.getItem(themeStorageKey)).toBe('light');
+    expect(await checked(ar.appearance.light)).toBe(true);
+
+    fireEvent.click(
+      (await appearance()).getByRole('radio', { name: ar.appearance.system }),
+    );
+    closeMenu();
+    expect(localStorage.getItem(themeStorageKey)).toBeNull();
+    expect(shown()).toBe('dark');
+    expect(await toggle('light')).toBeTruthy();
+
+    act(() => phone.switchTo('light'));
+    expect(shown()).toBe('light');
+    expect(await toggle('dark')).toBeTruthy();
+  });
+
+  it('stays in sync across navigation, reloads and other tabs', async () => {
+    device('light');
+    const router = open();
+    fireEvent.click(await toggle('dark'));
+    await router.navigate('/absent');
+    await screen.findByRole('heading', { name: ar.errors.notFound });
+    expect(shown()).toBe('dark');
+    await router.navigate('/');
+    expect(await toggle('light')).toBeTruthy();
+
+    reload();
+    expect(shown()).toBe('dark');
+    expect(await toggle('light')).toBeTruthy();
+
+    // Another tab picks light: this page and its shortcut follow.
+    localStorage.setItem(themeStorageKey, 'light');
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: themeStorageKey,
+          newValue: 'light',
+        }),
+      );
+    });
+    expect(shown()).toBe('light');
+    expect(await toggle('dark')).toBeTruthy();
   });
 });

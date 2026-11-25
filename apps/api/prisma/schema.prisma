@@ -517,6 +517,8 @@ model CatalogItem {
   node            CatalogNode                 @relation(fields: [nodeId], references: [id], onDelete: Restrict)
   unitId          Int
   unit            Unit                        @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  // Manually entered reference price. NULL means "not set", distinct from an explicit 0.00.
+  unitPrice       Decimal?                    @db.Decimal(14, 2)
   attributeValues CatalogItemAttributeValue[]
   prices          CatalogItemPrice[]
   images          CatalogItemImage[]

@@ -110,6 +110,14 @@ export function ItemPage() {
                   {prices && (
                     <>
                       <Detail
+                        label={copy.unitPrice}
+                        value={
+                          item.unitPrice == null
+                            ? copy.unitPriceUnset
+                            : formatMoney(item.unitPrice)
+                        }
+                      />
+                      <Detail
                         label={copy.latestPrice}
                         value={
                           item.latestPrice

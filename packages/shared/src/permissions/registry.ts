@@ -221,6 +221,9 @@ export const registry = Object.entries(definitions).map(([key, value]) => ({
   key: key as PermissionKey,
   ...value,
 }));
+// A site engineer is an ASSIGNED-scope account whose role holds this key. The site form lists
+// and assigns only these accounts; every other site assignment stays with the users editor.
+export const siteEngineerKey: PermissionKey = 'requests.create';
 export function isPermissionKey(key: string): key is PermissionKey {
   return Object.hasOwn(definitions, key);
 }

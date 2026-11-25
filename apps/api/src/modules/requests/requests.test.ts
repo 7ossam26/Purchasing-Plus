@@ -826,6 +826,46 @@ it('converts an other line through the catalog service and retains its frozen sn
   await send('post', conversion, { version: after.version }).expect(409);
 });
 
+it('codes an other line with a unit price only for price viewers', async () => {
+  const s = await submit(await draft([otherLine()]));
+  const conversion = path(s.id, '/items/' + s.items[0].id + '/add-to-catalog');
+  const size = await db.catalogItem.count();
+  // The creator can code items but cannot see prices, so it cannot set one.
+  await send('post', conversion, {
+    version: s.version,
+    unitPrice: '15',
+  }).expect(403);
+  const coder = await user(
+    'request-price-coder',
+    ['catalog.create', 'requests.viewPrices'],
+    [siteId],
+  );
+  await send(
+    'post',
+    conversion,
+    { version: s.version, unitPrice: '15.555' },
+    coder,
+  ).expect(422);
+  expect(await db.catalogItem.count()).toBe(size);
+  expect(
+    (await db.request.findUniqueOrThrow({ where: { id: s.id } })).version,
+  ).toBe(s.version);
+  const coded = (
+    await send(
+      'post',
+      conversion,
+      { version: s.version, unitPrice: '15.5' },
+      coder,
+    ).expect(200)
+  ).body;
+  const saved = await db.catalogItem.findUniqueOrThrow({
+    where: { id: coded.items[0].catalogItemId },
+  });
+  expect(saved.unitPrice?.toFixed(2)).toBe('15.50');
+  // Coding never prices the request line itself.
+  expect(coded.items[0].lineTotal).toBeNull();
+});
+
 it('filters and paginates by scope, urgency, stage, number, creator, category and Cairo date', async () => {
   now = new Date('2032-02-02T22:15:00Z');
   const older = await submit(await draft());

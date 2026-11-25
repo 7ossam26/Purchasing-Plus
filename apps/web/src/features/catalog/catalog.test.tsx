@@ -620,3 +620,127 @@ it('checks accessibility in a populated catalog folder', async () => {
   await screen.findByRole('link', { name: /كابلات/ });
   expect((await axe(document.body)).violations).toEqual([]);
 });
+
+it('enters and validates a labelled unit price, keeping an explicit zero', async () => {
+  const { fetch, router } = setup('/catalog/node/2/new', [
+    ...catalogRead,
+    'catalog.create',
+    'requests.viewPrices',
+  ]);
+  const dialog = within(
+    await screen.findByRole('dialog', { name: copy.addItem }),
+  );
+  const price = await dialog.findByLabelText<HTMLInputElement>(
+    copy.unitPriceField,
+  );
+  expect(dialog.getByText(copy.unitPriceHint)).toBeDefined();
+  expect(price.value).toBe('');
+  fireEvent.change(dialog.getByLabelText(admin.name), {
+    target: { value: 'مفتاح' },
+  });
+  fireEvent.change(dialog.getByLabelText(copy.unit), {
+    target: { value: String(piece.id) },
+  });
+  for (const attribute of [gauge, material])
+    fireEvent.click(
+      dialog.getByRole('button', {
+        name: ar.common.delete + ' ' + attribute.name,
+      }),
+    );
+  fireEvent.change(price, { target: { value: '1.234' } });
+  fireEvent.click(dialog.getByRole('button', { name: ar.common.save }));
+  expect(dialog.getByText(copy.invalidUnitPrice)).toBeDefined();
+  expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(
+    false,
+  );
+  fireEvent.change(price, { target: { value: '٠' } });
+  expect(price.value).toBe('0');
+  fireEvent.click(dialog.getByRole('button', { name: ar.common.save }));
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe('/catalog/item/11'),
+  );
+  const submission = fetch.mock.calls.find(
+    ([, init]) => init?.method === 'POST',
+  )?.[1];
+  expect(JSON.parse(String(submission?.body)).unitPrice).toBe('0');
+});
+
+it('edits, clears and shows the unit price only with the price grant', async () => {
+  const priced: CatalogItem = { ...item, unitPrice: '12.50' };
+  const handler = (path: string, init?: RequestInit) =>
+    path === '/catalog/items/11/editor' && init?.method === 'PATCH'
+      ? Response.json({ ...priced, ...JSON.parse(String(init.body)) })
+      : path === '/catalog/items/11'
+        ? Response.json(priced)
+        : fixtures(path, init);
+  const editor = [...catalogRead, 'catalog.edit'] as PermissionKey[];
+  const { fetch } = setup(
+    '/catalog/item/11/edit',
+    [...editor, 'requests.viewPrices'],
+    handler,
+  );
+  // The item page lists the entered price next to the latest purchase price.
+  expect(
+    await screen.findByText(formatMoney('12.50'), {
+      normalizer: (value) => value,
+    }),
+  ).toBeDefined();
+  const dialog = within(
+    await screen.findByRole('dialog', { name: copy.editItem }),
+  );
+  const price = await dialog.findByLabelText<HTMLInputElement>(
+    copy.unitPriceField,
+  );
+  expect(price.value).toBe('12.50');
+  fireEvent.change(price, { target: { value: '' } });
+  fireEvent.click(dialog.getByRole('button', { name: admin.saveChanges }));
+  await waitFor(() =>
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(
+      true,
+    ),
+  );
+  const patch = fetch.mock.calls.find(([, init]) => init?.method === 'PATCH');
+  expect(JSON.parse(String(patch?.[1]?.body))).toHaveProperty(
+    'unitPrice',
+    null,
+  );
+  cleanup();
+
+  // Without the grant the API omits the price, and the form neither shows nor sends it.
+  const hidden = setup('/catalog/item/11/edit', editor, (path, init) =>
+    path === '/catalog/items/11/editor' && init?.method === 'PATCH'
+      ? Response.json({ ...item, ...JSON.parse(String(init.body)) })
+      : fixtures(path, init),
+  );
+  const blind = within(
+    await screen.findByRole('dialog', { name: copy.editItem }),
+  );
+  await blind.findByLabelText(admin.name);
+  expect(blind.queryByLabelText(copy.unitPriceField)).toBeNull();
+  expect(screen.queryByText(copy.unitPrice)).toBeNull();
+  fireEvent.click(blind.getByRole('button', { name: admin.saveChanges }));
+  await waitFor(() =>
+    expect(
+      hidden.fetch.mock.calls.some(([, init]) => init?.method === 'PATCH'),
+    ).toBe(true),
+  );
+  const blindPatch = hidden.fetch.mock.calls.find(
+    ([, init]) => init?.method === 'PATCH',
+  );
+  expect(JSON.parse(String(blindPatch?.[1]?.body))).not.toHaveProperty(
+    'unitPrice',
+  );
+});
+
+it('marks a missing unit price as not set for price viewers', async () => {
+  setup(
+    '/catalog/item/11',
+    [...catalogRead, 'requests.viewPrices'],
+    (path, init) =>
+      path === '/catalog/items/11'
+        ? Response.json({ ...item, unitPrice: null })
+        : fixtures(path, init),
+  );
+  expect(await screen.findByText(copy.unitPrice)).toBeDefined();
+  expect(screen.getByText(copy.unitPriceUnset)).toBeDefined();
+});

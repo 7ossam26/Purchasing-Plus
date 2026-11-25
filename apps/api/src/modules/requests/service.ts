@@ -24,11 +24,13 @@ import {
   type Verdict,
   type Transition,
 } from '@purchasing-plus/shared/lifecycle';
+import { purchasingKeys } from '@purchasing-plus/shared/permissions';
 import type { z } from 'zod';
 
 import {
   allowed,
   assertSiteInScope,
+  forbidden,
   missing,
   type Viewer,
 } from '../../middleware/access.js';
@@ -367,6 +369,10 @@ export async function options({ tx, viewer, req }: Context) {
   );
 }
 
+export function canUsePurchasingWorkspace(viewer: Viewer) {
+  return purchasingKeys.some((key) => allowed(viewer, key));
+}
+
 export async function list(
   ctx: Context,
   {
@@ -374,12 +380,15 @@ export async function list(
     pageSize,
     stage,
     queue,
+    workspace,
     q,
     from,
     to,
     ...filters
   }: z.output<typeof requestListInput>,
 ) {
+  // The workspace adds no state filter: every lifecycle state in the viewer's site scope is listed.
+  if (workspace && !canUsePurchasingWorkspace(ctx.viewer)) throw forbidden();
   const dateOnly = (v: string) => v.length === 10;
   const start =
     from && (dateOnly(from) ? cairoDateBoundary(from) : new Date(from));

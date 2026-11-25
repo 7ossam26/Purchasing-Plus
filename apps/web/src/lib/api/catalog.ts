@@ -60,6 +60,8 @@ export interface CatalogItem extends NamedRecord {
     value: string | number;
     option: AttributeOption | null;
   }[];
+  // Present only for price viewers. Null means no price was entered; "0.00" is an explicit zero.
+  unitPrice?: string | null;
   latestPrice?: {
     unitPrice: string;
     createdAt: string;

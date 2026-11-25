@@ -57,6 +57,24 @@ export const editSite = z.strictObject({
   name: name.optional(),
   address: z.string().trim().max(1000).optional(),
 });
+const engineerIds = z
+  .array(id)
+  .max(200)
+  .refine((ids) => new Set(ids).size === ids.length);
+// The site form saves the site and its engineer assignments together.
+export const createSiteInput = createSite.extend({
+  engineerIds: engineerIds.default([]),
+});
+// Edits carry only the assignment changes, so concurrent edits to other engineers survive.
+export const editSiteInput = editSite.extend({
+  engineers: z
+    .strictObject({
+      add: engineerIds.default([]),
+      remove: engineerIds.default([]),
+    })
+    .refine(({ add, remove }) => !add.some((id) => remove.includes(id)))
+    .optional(),
+});
 export const pagination = z.strictObject({
   page: pathId.default(1),
   pageSize: pathId.pipe(z.number().max(100)).default(25),
@@ -75,6 +93,11 @@ export const siteFilters = userFilters.pick({
   pageSize: true,
   search: true,
   active: true,
+});
+export const siteEngineerFilters = userFilters.pick({
+  page: true,
+  pageSize: true,
+  search: true,
 });
 export const auditFilters = pagination
   .extend({

@@ -5,6 +5,7 @@ import {
   type createCatalogItem,
   type editCatalogItemInEditor,
 } from '@purchasing-plus/shared';
+import { masterData } from '@purchasing-plus/shared/i18n/ar';
 import type { z } from 'zod';
 
 import type { StorageDriver } from '../../lib/storage.js';
@@ -32,6 +33,7 @@ type NewItem = z.infer<typeof createCatalogItem>;
 type ItemEdit = z.infer<typeof editCatalogItemInEditor>;
 type Breadcrumb = ReturnType<Awaited<ReturnType<typeof breadcrumbs>>>;
 
+// The complete record, as audited. Callers outside this module receive it through `present`.
 function toDto(row: repo.ItemRecord, nodePath: Breadcrumb) {
   return {
     id: row.id,
@@ -46,6 +48,7 @@ function toDto(row: repo.ItemRecord, nodePath: Breadcrumb) {
     categoryIcon: nodePath[0]?.iconKey ?? null,
     unitId: row.unitId,
     unit: row.unit,
+    unitPrice: row.unitPrice?.toFixed(2) ?? null,
     attributeValues: row.attributeValues.map((value) => ({
       attributeId: value.attributeId,
       attribute: value.attribute,
@@ -55,17 +58,31 @@ function toDto(row: repo.ItemRecord, nodePath: Breadcrumb) {
   };
 }
 
-async function attachImages<T>(
-  dto: T,
+// Adds image URLs and removes the entered unit price unless the viewer may see prices.
+async function present(
+  dto: ReturnType<typeof toDto>,
   row: repo.ItemRecord,
   storage: StorageDriver,
+  viewer: Viewer,
 ) {
   return {
     ...dto,
+    unitPrice: allowed(viewer, 'requests.viewPrices')
+      ? dto.unitPrice
+      : undefined,
     images: await Promise.all(
       row.images.map((image) => imageUrls(image, storage)),
     ),
   };
+}
+
+// Writing a price the viewer cannot read would be a blind overwrite.
+function assertUnitPriceWrite(viewer: Viewer, unitPrice: unknown) {
+  if (unitPrice !== undefined && !allowed(viewer, 'requests.viewPrices'))
+    throw forbidden(
+      masterData.unitPriceForbidden,
+      masterData.unitPriceForbiddenFix,
+    );
 }
 
 async function toDtos(tx: Tx, rows: repo.ItemRecord[]) {
@@ -86,7 +103,14 @@ export async function itemsByIds(ctx: Context, ids: number[]) {
     ids.flatMap((id) => {
       const entry = byId.get(id);
       return entry
-        ? [attachImages(entry.dto, entry.row, ctx.req.app.locals.storage)]
+        ? [
+            present(
+              entry.dto,
+              entry.row,
+              ctx.req.app.locals.storage,
+              ctx.viewer,
+            ),
+          ]
         : [];
     }),
   );
@@ -125,7 +149,7 @@ export async function getItem(
   )
     throw missing();
   return {
-    ...(await attachImages(item!, row, req.app.locals.storage)),
+    ...(await present(item!, row, req.app.locals.storage, viewer)),
     ...(allowed(viewer, 'requests.viewPrices')
       ? {
           latestPrice: toPriceDto(
@@ -152,7 +176,7 @@ async function pageDtos(
     : null;
   return Promise.all(
     rows.map(async (row, index) => ({
-      ...(await attachImages(items[index]!, row, storage)),
+      ...(await present(items[index]!, row, storage, viewer)),
       ...(prices
         ? { latestPrice: toPriceDto(prices.get(row.id) ?? null, viewer) }
         : {}),
@@ -291,6 +315,7 @@ export async function addItem(
 ) {
   if (input.isActive === false && !allowed(ctx.viewer, deactivatePermission))
     throw forbidden();
+  assertUnitPriceWrite(ctx.viewer, input.unitPrice);
   const node = await activeNode(ctx.tx, input.nodeId);
   const categoryId = pathIds(node.path)[0]!;
   const category = await nodeWithBreadcrumb(ctx.tx, categoryId);
@@ -301,7 +326,7 @@ export async function addItem(
   const row = await repo.createItem(ctx.tx, { ...input, code }, values);
   const after = toDto(row, node.breadcrumb);
   await ctx.audit('catalogItem.create', 'CatalogItem', row.id, null, after);
-  return attachImages(after, row, ctx.req.app.locals.storage);
+  return present(after, row, ctx.req.app.locals.storage, ctx.viewer);
 }
 
 async function auditChange(
@@ -318,7 +343,7 @@ async function auditChange(
     oldDto,
     newDto,
   );
-  return attachImages(newDto!, after, ctx.req.app.locals.storage);
+  return present(newDto!, after, ctx.req.app.locals.storage, ctx.viewer);
 }
 
 export async function editItem(
@@ -329,6 +354,7 @@ export async function editItem(
 ) {
   if (input.isActive === false && !allowed(ctx.viewer, deactivatePermission))
     throw forbidden();
+  assertUnitPriceWrite(ctx.viewer, input.unitPrice);
   const before = await repo.findItem(ctx.tx, id);
   if (input.nodeId !== undefined && input.nodeId !== before.nodeId)
     await validateMove(ctx.tx, before.node.path, input.nodeId);

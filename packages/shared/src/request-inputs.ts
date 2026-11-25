@@ -92,6 +92,8 @@ export const addRequestItemToCatalogInput = createCatalogItem
 
 const time = z.union([z.iso.datetime({ offset: true }), z.iso.date()]);
 export const requestListInput = pagination.extend({
+  // The purchasing workspace lists every lifecycle state in scope; `queue` narrows it to actionable work.
+  workspace: z.literal('purchasing').optional(),
   queue: z.literal('purchasing').optional(),
   status: z.enum(requestStatuses).optional(),
   stage: z.enum(displayedStages).optional(),

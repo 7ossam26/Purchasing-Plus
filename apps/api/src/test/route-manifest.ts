@@ -49,6 +49,8 @@ add('get', '/roles/assignable-keys', 'roles.manage');
 add('post', '/roles', 'roles.manage');
 add('patch', '/roles/:id', 'roles.manage');
 add('delete', '/roles/:id', 'roles.manage');
+add('get', '/sites/engineers', 'users.manage', ['sites.create', 'sites.edit']);
+add('get', '/sites/:id/engineers', 'sites.view', 'users.manage');
 for (const area of ['sites', 'attributes', 'units', 'suppliers'] as const) {
   const root = '/' + area;
   add('get', root, `${area}.view`);

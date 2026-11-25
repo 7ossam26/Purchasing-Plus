@@ -2,7 +2,15 @@ import { expect, it } from 'vitest';
 
 import * as life from '../../src/lifecycle/index.js';
 
-import { data, fixture, now, sample, viewer } from './fixtures.js';
+import {
+  data,
+  fixture,
+  now,
+  only,
+  roundLine,
+  sample,
+  viewer,
+} from './fixtures.js';
 
 it.each([
   ['1.01', '0.00', '1.01', null],
@@ -83,12 +91,47 @@ it('restores an unavailable line for pricing, and a partial draft cannot satisfy
   ).toMatchObject({ code: 'NO_PRICED_ITEMS' });
 });
 
-it('keeps unavailable items, freezes round totals, and generates supplier orders and half-up catalog prices on approval', () => {
+it('saving a price or a partial pricing draft leaves the request in pricing, quietly', () => {
   const s = fixture('AT_PURCHASING');
+  s.items.push(life.openItem(data(12), 2));
+  const supplierOnly = life.applySavePricingDraft(
+    s,
+    viewer,
+    { version: 1, itemId: 11, supplierId: 8, lineTotal: null },
+    now,
+  );
+  const priced = life.applySavePricingDraft(
+    supplierOnly.next,
+    viewer,
+    { version: 2, itemId: 11, supplierId: 8, lineTotal: '20.00' },
+    now,
+  );
+  for (const draft of [supplierOnly, priced]) {
+    expect(draft.next.status).toBe('AT_PURCHASING');
+    expect(life.deriveStage(draft.next)).toBe('AT_PURCHASING');
+    expect(draft.next.items.map((i) => i.state)).toEqual(['OPEN', 'OPEN']);
+    expect(draft.next.rounds).toEqual([]);
+    expect(draft.next.supplyOrders).toEqual([]);
+    expect(draft.events).toEqual([]);
+    expect(draft.notify).toEqual([]);
+    expect(draft.priceRecords).toEqual([]);
+  }
+  expect(priced.next.items[0]).toMatchObject({
+    supplierId: 8,
+    lineTotal: '20.00',
+  });
+  expect(life.inQueue('purchasing', priced.next, viewer)).toBe(true);
+  expect(life.inQueue('receipt', priced.next, viewer)).toBe(false);
+});
+
+it('submitting final pricing sends priced lines straight to receipt with supplier orders and half-up catalog prices', () => {
+  const s = fixture('AT_PURCHASING');
+  s.createdById = 55;
   s.items.push(
     life.openItem(data(12), 2),
     life.openItem({ ...data(13), catalogItemId: null, otherName: 'أخرى' }, 3),
     life.openItem(data(14), 4),
+    life.openItem(data(15), 5),
   );
   expect(life.canSubmitPricing(s, viewer, { version: 1 })).toMatchObject({
     code: 'NO_PRICED_ITEMS',
@@ -123,42 +166,66 @@ it('keeps unavailable items, freezes round totals, and generates supplier orders
     { version: 5, deliveryFee: '50.00' },
     now,
   );
-  const submit = life.applySubmitPricing(fee.next, viewer, { version: 6 }, now);
-  expect(submit.next.items.map((i) => i.state)).toEqual([
-    'AWAITING_APPROVAL',
-    'AWAITING_APPROVAL',
-    'AWAITING_APPROVAL',
-    'UNAVAILABLE',
-  ]);
-  expect(submit.events[0]).toMatchObject({
-    type: 'PRICING_SUBMITTED',
-    stageAfter: 'AWAITING_APPROVAL',
-    payload: { roundNo: 1, roundTotal: '11.42', deliveryFee: '50.00' },
-  });
-  const approved = life.applyApprovePricing(
-    submit.next,
-    viewer,
-    { roundNo: 1, version: 7 },
+  const submit = life.applySubmitPricing(
+    fee.next,
+    only('purchasing.price'),
+    { version: 6 },
     now,
   );
-  expect(approved.next.rounds[0]).toMatchObject({
-    status: 'APPROVED',
-    decidedById: 7,
-    decidedAt: now.toISOString(),
-  });
+  expect(submit.next.status).toBe('FULFILMENT');
+  expect(life.deriveStage(submit.next)).toBe('AWAITING_RECEIPT');
+  // Item 15 was never priced: it stays OPEN with purchasing, like the unavailable line.
+  expect(submit.next.items.map((i) => i.state)).toEqual([
+    'AWAITING_RECEIPT',
+    'AWAITING_RECEIPT',
+    'AWAITING_RECEIPT',
+    'UNAVAILABLE',
+    'OPEN',
+  ]);
+  expect(submit.next.rounds).toEqual([
+    {
+      number: 1,
+      status: 'SUBMITTED',
+      decidedAt: null,
+      decidedById: null,
+      lines: [
+        expect.objectContaining({ itemId: 11, lineTotal: '1.02' }),
+        expect.objectContaining({ itemId: 12, lineTotal: '10.10' }),
+        expect.objectContaining({ itemId: 13, lineTotal: '0.30' }),
+      ],
+    },
+  ]);
+  expect(submit.events).toEqual([
+    expect.objectContaining({
+      type: 'PRICING_SENT_FOR_RECEIPT',
+      stageAfter: 'AWAITING_RECEIPT',
+      actorId: 7,
+      itemIds: [11, 12, 13],
+      payload: expect.objectContaining({
+        roundNo: 1,
+        roundTotal: '11.42',
+        deliveryFee: '50.00',
+      }),
+    }),
+  ]);
   expect(
-    approved.next.supplyOrders.map((o) => [
+    submit.notify.map((n) => ('userId' in n ? n.userId : n.holdersOf)),
+  ).toEqual([55, 'receipt.record', 'purchasing.sendSupplyOrder']);
+  expect(
+    submit.next.supplyOrders.map((o) => [
+      o.number,
       o.supplierId,
+      o.sent,
       o.lines.map((l) => l.itemId),
     ]),
   ).toEqual([
-    [8, [11, 12]],
-    [9, [13]],
+    [1, 8, false, [11, 12]],
+    [2, 9, false, [13]],
   ]);
-  expect(approved.priceRecords).toEqual([
+  expect(submit.priceRecords).toEqual([
     {
       requestItemId: 11,
-      source: 'APPROVED',
+      source: 'SUBMITTED',
       catalogItemId: 111,
       supplierId: 8,
       lineTotal: '1.02',
@@ -167,7 +234,7 @@ it('keeps unavailable items, freezes round totals, and generates supplier orders
     },
     {
       requestItemId: 12,
-      source: 'APPROVED',
+      source: 'SUBMITTED',
       catalogItemId: 112,
       supplierId: 8,
       lineTotal: '10.10',
@@ -175,17 +242,16 @@ it('keeps unavailable items, freezes round totals, and generates supplier orders
       unitPrice: '2.53',
     },
   ]);
+  // Nobody approves or rejects any more: the request is already with the site.
+  expect(Object.keys(life.actions)).not.toContain('approvePricing');
+  expect(Object.keys(life.actions)).not.toContain('rejectPricing');
   expect(
-    life.canRejectPricing(approved.next, viewer, {
-      version: 8,
-      roundNo: 1,
-      reason: 'تعديل',
-    }),
-  ).toMatchObject({ code: 'ROUND_NOT_PENDING' });
+    life.availableActions(submit.next, viewer).map((a) => a.action),
+  ).toEqual(expect.arrayContaining(['recordReceipt', 'markSupplyOrderSent']));
   const sent = life.applyMarkSupplyOrderSent(
-    approved.next,
+    submit.next,
     viewer,
-    { orderNo: 2, version: 8 },
+    { orderNo: 2, version: 7 },
     now,
   );
   expect(sent.events[0]).toMatchObject({
@@ -193,60 +259,194 @@ it('keeps unavailable items, freezes round totals, and generates supplier orders
     payload: { supplierId: 9, lineNos: [3] },
   });
   expect(
-    life.canMarkSupplyOrderSent(sent.next, viewer, { orderNo: 2, version: 9 }),
+    life.canMarkSupplyOrderSent(sent.next, viewer, { orderNo: 2, version: 8 }),
   ).toMatchObject({ code: 'NO_PENDING_SEND' });
   const nextPrice = life.applyPriceUnavailable(
     sent.next,
     viewer,
-    { itemId: 14, version: 9, supplierId: 8, lineTotal: '12.30' },
+    { itemId: 14, version: 8, supplierId: 8, lineTotal: '12.30' },
     now,
   );
+  expect(nextPrice.events.map((e) => e.type)).toEqual(['ITEM_AVAILABLE_AGAIN']);
+  expect(nextPrice.next.items[3]!.state).toBe('OPEN');
   const nextRound = life.applySubmitPricing(
     nextPrice.next,
     viewer,
-    { version: 10 },
+    { version: 9 },
     now,
   );
   expect(nextRound.next.rounds[1]).toMatchObject({
     number: 2,
-    status: 'PENDING',
+    status: 'SUBMITTED',
     lines: [{ itemId: 14 }],
   });
-  const rejected = life.applyRejectPricing(
-    nextRound.next,
-    viewer,
-    { version: 11, roundNo: 2, reason: 'غالي' },
+  expect(nextRound.next.items[3]!.state).toBe('AWAITING_RECEIPT');
+  expect(nextRound.next.supplyOrders.at(-1)).toMatchObject({
+    number: 3,
+    supplierId: 8,
+    lines: [{ itemId: 14 }],
+  });
+});
+
+it('the engineer confirms actual delivery after submission, including partial deliveries', () => {
+  const { state } = sample('submitPricing');
+  state.createdById = 55;
+  const submitted = life.applySubmitPricing(
+    state,
+    only('purchasing.price'),
+    { version: 1 },
     now,
   );
-  expect(rejected.next.status).toBe('FULFILMENT');
-  expect(rejected.next.items.map((i) => i.state)).toEqual([
-    'AWAITING_RECEIPT',
-    'AWAITING_RECEIPT',
-    'AWAITING_RECEIPT',
-    'REJECTED',
-  ]);
-  expect(rejected.events.map((e) => e.type)).toEqual(['PRICING_REJECTED']);
-});
-it('first round rejection is final even with unavailable lines, and later rejection closes only its round', () => {
-  const { state } = sample('rejectPricing');
-  state.items.push({ ...life.openItem(data(12), 2), state: 'UNAVAILABLE' });
-  const reject = (s: life.RequestState, n: number) =>
-    life.applyRejectPricing(
+  const engineer = { ...only('receipt.record'), userId: 55 };
+  const receive = (s: life.RequestState, quantity: string, who = engineer) =>
+    life.applyRecordReceipt(
       s,
-      viewer,
-      { roundNo: n, reason: 'تعديل', version: s.version },
+      who,
+      { version: s.version, lines: [{ itemId: 11, quantity }] },
       now,
     );
-  const first = reject(state, 1);
-  expect(first.next.status).toBe('REJECTED');
-  expect(first.events.map((e) => [e.type, e.actorId])).toEqual([
-    ['PRICING_REJECTED', 7],
-    ['REJECTED_AUTO', null],
+  // Pricing alone completes nothing: the line waits until someone records delivery.
+  expect(submitted.next.items[0]!.state).toBe('AWAITING_RECEIPT');
+  expect(life.inQueue('receipt', submitted.next, engineer)).toBe(true);
+  expect(() =>
+    receive(submitted.next, '1.00', {
+      ...only('requests.view', 'requests.viewPrices'),
+      userId: 55,
+    }),
+  ).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }));
+  expect(() =>
+    receive(submitted.next, '1.00', { ...engineer, siteIds: [99] }),
+  ).toThrow(expect.objectContaining({ code: 'OUT_OF_SCOPE' }));
+  const partial = receive(submitted.next, '1.50');
+  expect(partial.next.items[0]).toMatchObject({
+    state: 'REMAINING',
+    receivedQty: '1.50',
+  });
+  expect(partial.next.status).toBe('FULFILMENT');
+  expect(partial.notify.map((n) => 'holdersOf' in n && n.holdersOf)).toEqual([
+    'purchasing.handleRemaining',
   ]);
-  state.rounds[0]!.number = 2;
-  expect(reject(state, 2).next.status).toBe('FULFILMENT');
-  state.items[1]!.state = 'RECEIVED';
-  expect(reject(state, 2).next.status).toBe('COMPLETED');
+  const coming = life.applyStillComing(
+    partial.next,
+    only('purchasing.handleRemaining'),
+    { version: partial.next.version, itemId: 11 },
+    now,
+  );
+  const full = receive(coming.next, '2.50');
+  expect(full.next.items[0]).toMatchObject({
+    state: 'RECEIVED',
+    receivedQty: '4.00',
+  });
+  expect(full.next.status).toBe('COMPLETED');
+  expect(full.events.map((e) => [e.type, e.actorId])).toEqual([
+    ['RECEIPT_RECORDED', 55],
+    ['COMPLETED', null],
+  ]);
+});
+
+it('releases rounds left waiting for the removed approval exactly once, as the system', () => {
+  const { state, input } = sample('releasePendingPricing');
+  state.createdById = 55;
+  state.items.push(
+    { ...life.openItem(data(12), 2), state: 'AWAITING_RECEIPT' },
+    { ...life.openItem(data(13), 3), state: 'AWAITING_APPROVAL' },
+    { ...life.openItem(data(14), 4), state: 'RECEIVED', receivedQty: '4.00' },
+  );
+  const decided = {
+    status: 'APPROVED' as const,
+    decidedById: 3,
+    decidedAt: '2026-11-01T08:00:00.000Z',
+    lines: [{ ...roundLine, itemId: 12, lineNo: 2, catalogItemId: 112 }],
+  };
+  state.rounds = [
+    { ...decided, number: 1 },
+    { ...state.rounds[0]!, number: 2 },
+    {
+      number: 3,
+      status: 'PENDING',
+      decidedById: null,
+      decidedAt: null,
+      lines: [
+        {
+          ...roundLine,
+          itemId: 13,
+          lineNo: 3,
+          catalogItemId: null,
+          supplierId: 9,
+          lineTotal: '7.00',
+        },
+      ],
+    },
+  ];
+  state.supplyOrders = [
+    { number: 1, supplierId: 8, sent: true, lines: decided.lines },
+  ];
+  for (const who of [viewer, only('purchasing.price')])
+    expect(life.canReleasePendingPricing(state, who, input)).toMatchObject({
+      code: 'SYSTEM_ONLY',
+    });
+  const released = life.applyReleasePendingPricing(state, null, input, now);
+  expect(released.next.status).toBe('FULFILMENT');
+  expect(life.deriveStage(released.next)).toBe('AWAITING_RECEIPT');
+  expect(released.next.items.map((i) => i.state)).toEqual([
+    'AWAITING_RECEIPT',
+    'AWAITING_RECEIPT',
+    'AWAITING_RECEIPT',
+    'RECEIVED',
+  ]);
+  // Historical approval decisions, pricing and completed receipts stay exactly as they were.
+  expect(released.next.rounds[0]).toEqual({ ...decided, number: 1 });
+  expect(released.next.rounds.slice(1)).toEqual(
+    state.rounds
+      .slice(1)
+      .map((round) => ({ ...round, status: 'SUBMITTED' as const })),
+  );
+  expect(released.next.items[3]!.receivedQty).toBe('4.00');
+  expect(
+    released.next.supplyOrders.map((o) => [
+      o.number,
+      o.supplierId,
+      o.sent,
+      o.lines.map((l) => l.itemId),
+    ]),
+  ).toEqual([
+    [1, 8, true, [12]],
+    [2, 8, false, [11]],
+    [3, 9, false, [13]],
+  ]);
+  expect(released.priceRecords).toEqual([
+    expect.objectContaining({
+      requestItemId: 11,
+      source: 'SUBMITTED',
+      unitPrice: '3.38',
+    }),
+  ]);
+  expect(released.events).toEqual([
+    expect.objectContaining({
+      type: 'PRICING_RELEASED',
+      actorId: null,
+      stageAfter: 'AWAITING_RECEIPT',
+      itemIds: [11, 13],
+      payload: { roundNos: [2, 3] },
+    }),
+  ]);
+  expect(
+    released.notify.map((n) => ('userId' in n ? n.userId : n.holdersOf)),
+  ).toEqual([55, 'receipt.record', 'purchasing.sendSupplyOrder']);
+  expect(released.next.version).toBe(state.version + 1);
+  // A rerun finds nothing pending and changes nothing.
+  expect(
+    life.canReleasePendingPricing(released.next, null, {
+      version: released.next.version,
+    }),
+  ).toMatchObject({ code: 'ROUND_NOT_PENDING' });
+  expect(life.pendingRounds(released.next)).toEqual([]);
+  // A pending round whose line is no longer awaiting approval is refused rather than guessed.
+  const stale = structuredClone(state);
+  stale.items[0]!.state = 'CANCELLED';
+  expect(life.canReleasePendingPricing(stale, null, input)).toMatchObject({
+    code: 'WRONG_ITEM_STATE',
+  });
 });
 it('records multiple partial receipts, same-supplier follow-up and repricing of only the outstanding quantity', () => {
   const { state } = sample('recordReceipt');
@@ -468,9 +668,10 @@ it('checks batch selection and sent markers and never considers an unsent select
       supplierId: 8,
     }),
   ).toMatchObject({ code: 'NO_PENDING_SEND' });
-  const invalid = sample('approvePricing');
+  const decided = sample('releasePendingPricing');
+  decided.state.rounds[0]!.status = 'SUBMITTED';
   expect(
-    life.canApprovePricing(invalid.state, viewer, { version: 1, roundNo: 2 }),
+    life.canReleasePendingPricing(decided.state, null, { version: 1 }),
   ).toMatchObject({ code: 'ROUND_NOT_PENDING' });
 });
 it('accepts and clears a separate delivery fee and validates both money fields', () => {

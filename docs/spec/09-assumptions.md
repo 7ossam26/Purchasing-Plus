@@ -17,9 +17,9 @@ Where the answers didn't settle something, the spec takes the position below. Ch
 | A-3 | Quantities: the creator edits freely until the manager approves; the manager edits them at the approval stage (`requests.editQuantities`); while paused, anyone with `requests.editWhilePaused` edits everything including quantities; purchasing never edits quantities | P07, P09 |
 | A-4 | Pause and every «إرجاع للتعديل» require a reason. The officer's «إرجاع للتعديل» pauses the request and notifies the creator; resuming needs `requests.pause` | P09 |
 | A-5 | Rejecting a later pricing round (items that were unavailable at first) rejects only those items and the request continues. Rejecting round 1 with nothing ever approved makes the whole request «مرفوض» | P11 |
-| A-6 | During fulfilment the displayed stage uses the precedence approval → receipt → remaining, with per-state counts beside it | P07 |
-| A-7 | Supply orders are created per supplier on approval; the default message includes the site name and address; they never block receipt | P11 |
-| A-8 | Pricing approval also notifies `purchasing.sendSupplyOrder` holders so supply orders go out | P13 |
+| A-6 | During fulfilment the displayed stage uses the precedence receipt → remaining (approval only for unmigrated history), with per-state counts beside it | P07, 2026-11-25 |
+| A-7 | Supply orders are created per supplier when pricing is submitted; the default message includes the site name and address; they never block receipt | P11, 2026-11-25 |
+| A-8 | Submitting pricing also notifies `purchasing.sendSupplyOrder` holders so supply orders go out | P13, 2026-11-25 |
 | A-9 | Items and groups can only move within their own category | P04 |
 | A-10 | «عرض للعميل» hides prices, codes, suppliers and internal notes | P06 |
 | A-11 | «اتحل من المهندس» applies to unavailable and remaining items only | P11 |
@@ -33,7 +33,7 @@ Where the answers didn't settle something, the spec takes the position below. Ch
 | A-19 | `exceljs` instead of the npm `xlsx` package | P14, P15 |
 | A-20 | Notifications are kept 90 days | P13 |
 | A-21 | Superadmins have no role, are hidden from other users, and appear as «الدعم الفني» in history | P01 |
-| A-22 | The approval screen shows each item's last catalog price and the change (small UX addition) | P12 |
+| A-22 | The pricing history shows each item's last catalog price and the change, frozen at submission (small UX addition) | P12, 2026-11-25 |
 | A-23 | When an RFQ message is too long for a reliable WhatsApp link (> 4,000 encoded characters), the UI pushes «نسخ الرسالة» instead | P10 |
 | A-24 | Engineers browse the catalog with `catalog.view` alone; التكويدات itself needs `masterData.view` | P01, P05 |
 | A-25 | «أضف للكتالوج» needs `catalog.create` (which itself needs access to التكويدات). A role that can only *view* التكويدات can't add items to the catalog | P08 |

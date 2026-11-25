@@ -153,11 +153,22 @@ export function setSent(
     data: { sentAt: at, sentById: userId },
   });
 }
+// Freeze the catalog comparison for a whole round before its own price records are appended.
+function freezeComparison(tx: Tx, roundId: number) {
+  return tx.$executeRaw(Prisma.sql`
+    UPDATE "PricingRoundItem" line SET "previousPriceId" = (
+      SELECT price.id FROM "CatalogItemPrice" price
+      WHERE price."itemId" = line."catalogItemId"
+      ORDER BY price."createdAt" DESC, price.id DESC LIMIT 1
+    ) WHERE line."roundId" = ${roundId} AND line."catalogItemId" IS NOT NULL
+  `);
+}
+// `by` is the submitting user. A system transition passes null and never creates a round.
 export async function persistRounds(
   tx: Tx,
   before: RequestState,
   after: RequestState,
-  by: number,
+  by: number | null,
   now: Date,
 ) {
   const previous = new Map(before.rounds.map((round) => [round.number, round]));
@@ -165,7 +176,8 @@ export async function persistRounds(
     const { number, status, decidedAt, decidedById, lines } = round;
     const former = previous.get(number);
     if (!former) {
-      await tx.pricingRound.create({
+      if (by === null) throw new Error('A pricing round needs its submitter');
+      const created = await tx.pricingRound.create({
         data: {
           requestId: after.id,
           number,
@@ -178,6 +190,8 @@ export async function persistRounds(
           items: { createMany: { data: lines } },
         },
       });
+      // A submitted round is final at once: it records prices in this same transition.
+      if (status !== 'PENDING') await freezeComparison(tx, created.id);
     } else if (
       former.status !== status ||
       former.decidedAt !== decidedAt ||
@@ -187,14 +201,7 @@ export async function persistRounds(
         where: { requestId_number: { requestId: after.id, number } },
         data: { status, decidedAt, decidedById },
       });
-      // Freeze the comparison for the entire decision before appending its price records.
-      await tx.$executeRaw(Prisma.sql`
-        UPDATE "PricingRoundItem" line SET "previousPriceId" = (
-          SELECT price.id FROM "CatalogItemPrice" price
-          WHERE price."itemId" = line."catalogItemId"
-          ORDER BY price."createdAt" DESC, price.id DESC LIMIT 1
-        ) WHERE line."roundId" = ${updated.id} AND line."catalogItemId" IS NOT NULL
-      `);
+      await freezeComparison(tx, updated.id);
     }
   }
 }

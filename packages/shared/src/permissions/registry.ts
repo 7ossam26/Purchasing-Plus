@@ -48,11 +48,11 @@ const definitions = {
     'requests.view',
     'requests.viewSupplierNames',
   ]),
-  'purchasing.price': entry('المشتريات', 'تسعير البنود وإرسالها للاعتماد', [
-    'requests.view',
-    'requests.viewPrices',
-    'requests.viewSupplierNames',
-  ]),
+  'purchasing.price': entry(
+    'المشتريات',
+    'تسعير البنود وإرسالها للمهندس للاستلام',
+    ['requests.view', 'requests.viewPrices', 'requests.viewSupplierNames'],
+  ),
   'purchasing.returnForEdit': entry(
     'المشتريات',
     'إرجاع الطلب للتعديل من المشتريات',
@@ -67,22 +67,10 @@ const definitions = {
     'التعامل مع البنود المتبقية',
     ['requests.view', 'requests.viewPrices', 'requests.viewSupplierNames'],
   ),
-  'pricing.approve': entry('الاعتماد والاستلام', 'اعتماد التسعير', [
-    'requests.view',
-    'requests.viewPrices',
-  ]),
-  'pricing.reject': entry('الاعتماد والاستلام', 'رفض التسعير', [
-    'requests.view',
-    'requests.viewPrices',
-  ]),
-  'receipt.record': entry('الاعتماد والاستلام', 'تسجيل الاستلام', [
+  'receipt.record': entry('الاستلام', 'تسجيل الاستلام', ['requests.view']),
+  'items.resolveExternally': entry('الاستلام', 'تعليم بند «اتحل من المهندس»', [
     'requests.view',
   ]),
-  'items.resolveExternally': entry(
-    'الاعتماد والاستلام',
-    'تعليم بند «اتحل من المهندس»',
-    ['requests.view'],
-  ),
   'masterData.view': entry('التكويدات', 'فتح صفحة التكويدات', []),
   'catalog.view': entry('التكويدات', 'تصفح الأصناف', []),
   'catalog.create': entry('التكويدات', 'إضافة الأصناف', [
@@ -214,6 +202,12 @@ const definitions = {
   ),
 };
 export type PermissionKey = keyof typeof definitions;
+// Pricing approval was removed: submitted pricing goes straight to the site for receipt. These
+// keys are no longer grantable, and the one-time workflow migration strips them from stored roles.
+export const retiredPermissionKeys = [
+  'pricing.approve',
+  'pricing.reject',
+] as const;
 export const purchasingKeys = (
   Object.keys(definitions) as PermissionKey[]
 ).filter((key) => key.startsWith('purchasing.'));

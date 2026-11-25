@@ -54,7 +54,7 @@ import { settingsApi } from '../../lib/api/settings.js';
 import { ItemEditor } from '../catalog/ItemEditor.js';
 
 import { QuantityField, RequestFields, UrgencyChoices } from './forms.js';
-import { PricingApproval } from './pricing-approval.js';
+import { PricingRounds } from './pricing-rounds.js';
 import { PurchasingTab } from './purchasing-tab.js';
 import { usePurchaseWrites } from './purchasing-writes.js';
 import { ReceiptTab } from './receipt.js';
@@ -179,13 +179,8 @@ export function RequestDetailPage() {
   const canTimeline = useCan('requests.viewTimeline');
   const canPurchase = useCanAny(purchasingKeys);
   const canReceipt = useCanOnSite('receipt.record', request.siteId);
-  const canApprovePricing = useCanOnSite('pricing.approve', request.siteId);
-  const canRejectPricing = useCanOnSite('pricing.reject', request.siteId);
-  const showRounds = canApprovePricing || canRejectPricing;
-  const feeInRound = request.rounds?.some(
-    (round) =>
-      round.status === 'PENDING' && round.deliveryFee === request.deliveryFee,
-  );
+  // Price viewers can follow every pricing round; nobody approves them any more.
+  const showRounds = useCanOnSite('requests.viewPrices', request.siteId);
   const purchaseWrite = usePurchaseWrites(request);
   const canBrowse = useCan('catalog.view');
   const createCatalog = useCanOnSite('catalog.create', request.siteId);
@@ -455,13 +450,7 @@ export function RequestDetailPage() {
           ? 'receipt'
           : 'items';
   const purchasingSelected = shownTab === 'purchasing';
-  const tabHasToolbar =
-    purchasingSelected ||
-    shownTab === 'receipt' ||
-    (shownTab === 'items' &&
-      !revision &&
-      (hasAction(request, 'approvePricing') ||
-        hasAction(request, 'rejectPricing')));
+  const tabHasToolbar = purchasingSelected || shownTab === 'receipt';
   const toolbar = (
     <ActionBar
       stickyOnDesktop
@@ -496,11 +485,10 @@ export function RequestDetailPage() {
   ) : (
     <div className="grid gap-3">
       {shownTab === 'items' && showRounds && (
-        <PricingApproval request={request} write={purchaseWrite} />
+        <PricingRounds request={request} />
       )}
       <ItemRows
         request={request}
-        showDeliveryFee={!showRounds || !feeInRound}
         renderActions={(line) => (
           <ResolveItem request={request} line={line} write={purchaseWrite} />
         )}

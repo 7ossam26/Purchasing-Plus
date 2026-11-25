@@ -45,13 +45,14 @@ When adding from the catalog, `specs` is pre-filled from the item's attribute va
 
 `deriveStage(items)` in the shared package. Precedence, first match wins:
 
-1. Any item `AWAITING_APPROVAL` → «بانتظار اعتماد التسعير»
-2. Any item `AWAITING_RECEIPT` → «بانتظار الاستلام»
-3. Any item `UNAVAILABLE` or `REMAINING` → «بنود متبقية»
+1. Any item `AWAITING_RECEIPT` → «بانتظار الاستلام»
+2. Any item `UNAVAILABLE` or `REMAINING` → «بنود متبقية»
+
+`AWAITING_APPROVAL` («بانتظار اعتماد التسعير») exists only in history recorded before pricing approval was removed (2026-11-25). `deriveStage` still ranks it first so unmigrated rows render, and the startup migration releases them (see «Pricing approval removed» below).
 
 Every list row, card and detail header also shows per-state counts when more than one state is open, e.g. «8 بانتظار الاستلام» and «2 عند المشتريات» as separate small chips.
 
-The 7-step stage rail (05-timeline) uses: مسودة → بانتظار موافقة المدير → عند المشتريات → بانتظار اعتماد التسعير → بانتظار الاستلام → بنود متبقية → مكتمل. `RETURNED` and `PAUSED` are shown as markers on the rail; `REJECTED` and `CANCELLED` end it.
+The 6-step stage rail (05-timeline) uses: مسودة → بانتظار موافقة المدير → عند المشتريات → بانتظار الاستلام → بنود متبقية → مكتمل. `RETURNED` and `PAUSED` are shown as markers on the rail; `REJECTED` and `CANCELLED` end it.
 
 ## Item states
 
@@ -59,7 +60,7 @@ The 7-step stage rail (05-timeline) uses: مسودة → بانتظار مواف
 |---|---|---|
 | `OPEN` | Not yet priced (pricing draft fields may be filled) | no |
 | `UNAVAILABLE` | Officer marked it «غير متوفر»; stays with purchasing | no |
-| `AWAITING_APPROVAL` | In a submitted pricing round | no |
+| `AWAITING_APPROVAL` | History only: in a round submitted for the removed pricing approval | no |
 | `AWAITING_RECEIPT` | Approved (or re-priced / still coming); waiting on site | no |
 | `REMAINING` | Part received; the rest is back with purchasing | no |
 | `RECEIVED` | Fully received | yes |
@@ -98,7 +99,7 @@ The creator may change urgency in DRAFT, AWAITING_MANAGER and RETURNED while `ur
 | T13 | Edit while paused | `requests.editWhilePaused` | PAUSED → same | diff | Anyone holding it, whoever paused. Add, remove or edit items, specs, quantities. Edited items with a pricing draft: clear it and set `needsRepricing` («اتعدل – محتاج إعادة تسعير»). Edited items that were in a sent batch: set `modifiedAfterSend` («اتعدل بعد الإرسال»). Sets `isModified` |
 | T14 | Resume | `requests.pause` | PAUSED → AT_PURCHASING | — | Notifies purchasing |
 | T15 | Batches, pricing, unavailable, delivery fee | see 03 | AT_PURCHASING → same | | |
-| T16 | Submit pricing | `purchasing.price` | AT_PURCHASING → FULFILMENT | ≥1 priced item | Creates pricing round 1. Priced items → AWAITING_APPROVAL; unavailable stay UNAVAILABLE. Notifies `pricing.approve` holders |
+| T16 | Submit pricing «إرسال للمهندس للاستلام» | `purchasing.price` | AT_PURCHASING or FULFILMENT → FULFILMENT | ≥1 priced item | Creates the next pricing round with status `SUBMITTED` (final, no approval). Priced items → AWAITING_RECEIPT; unavailable stay UNAVAILABLE and unpriced stay OPEN with purchasing. For each catalog item, append a price record (unit price = lineTotal ÷ quantity), the catalog's latest purchase price. Creates supply orders (03). Event `PRICING_SENT_FOR_RECEIPT`. Notifies the creator (the site engineer), `receipt.record` holders and `purchasing.sendSupplyOrder` holders in the site's scope. Saving a price or a partial pricing draft (T15) never leaves pricing |
 
 Pausing is only possible in AT_PURCHASING. No item edits are possible in FULFILMENT.
 
@@ -106,9 +107,9 @@ Pausing is only possible in AT_PURCHASING. No item edits are possible in FULFILM
 
 | # | Action | Permission | Effect |
 |---|---|---|---|
-| T17 | Approve pricing round | `pricing.approve` | Round items → AWAITING_RECEIPT. Records who approved, shown prominently. For each catalog item, append a price record (unit price = lineTotal ÷ quantity) — this becomes the catalog's latest purchase price. Creates supply orders (03). Notifies the creator, `receipt.record` holders and `purchasing.sendSupplyOrder` holders |
-| T18 | Reject pricing round | `pricing.reject` | Reason required. Round items → REJECTED. If this was round 1 and no item was ever approved, the request → REJECTED (final). Otherwise the request continues. Notifies the creator. «نسخ لطلب جديد» is offered for the rejected items |
-| T19 | Price a previously unavailable item | `purchasing.price` | Item → OPEN with pricing; submitting creates a new round → AWAITING_APPROVAL (needs approval) |
+| T17–T18 | Removed 2026-11-25 | — | Pricing approval and rejection no longer exist. Rounds decided before keep their `APPROVED` / `REJECTED` status, decider and timeline events, and the header still shows «اعتمد بواسطة» / «رفض بواسطة» for them. Historically rejected lines can still be copied with «نسخ لطلب جديد» |
+| T17-M | Release pending pricing (one-time migration) | system | FULFILMENT requests with a `PENDING` round: round → `SUBMITTED`, its AWAITING_APPROVAL lines → AWAITING_RECEIPT, with the same price records and supply orders as T16. System event `PRICING_RELEASED`, same recipients as T16. Refused when nothing is pending, so a rerun writes nothing |
+| T19 | Price a previously unavailable item | `purchasing.price` | Item → OPEN with pricing; submitting creates a new round → AWAITING_RECEIPT (no approval) |
 | T20 | Record receipt | `receipt.record` | Quantity > 0 and ≤ outstanding, optional note, several receipts allowed. If outstanding reaches 0 → RECEIVED. If a receipt leaves some outstanding → REMAINING (back with purchasing). Notifies `purchasing.handleRemaining` holders |
 | T21 | «لسه جاي من نفس المورد» | `purchasing.handleRemaining` | REMAINING → AWAITING_RECEIPT. Same supplier and price, no approval, no new supply order |
 | T22 | Re-price remaining | `purchasing.handleRemaining` | New supplier and line total for the outstanding quantity → AWAITING_RECEIPT. **No approval.** Appends a catalog price record. Creates a supply order if the supplier changed |
@@ -132,11 +133,14 @@ A request appears in a user's queue when they can act on it now (permission + sc
 | مسوداتي | DRAFT or RETURNED, created by me |
 | بانتظار موافقتي | AWAITING_MANAGER and I hold `requests.approve` |
 | عند المشتريات | AT_PURCHASING, or FULFILMENT with UNAVAILABLE/REMAINING items, or approved items whose supply order isn't marked sent — and I hold the matching purchasing key |
-| بانتظار اعتمادي | FULFILMENT with AWAITING_APPROVAL items and I hold `pricing.approve` |
 | بانتظار الاستلام | FULFILMENT with AWAITING_RECEIPT items and I hold `receipt.record` |
 | موقوفة | PAUSED and I hold `requests.editWhilePaused` |
 
 Sort: urgency (high first), then time in current stage (oldest first).
+
+## Following a request (stakeholders)
+
+Anyone holding `requests.view` with the request's site in scope (for example accounting and the company owner) can open the request list and the request page from the moment the draft is first saved, through review, return, pricing, receipt and completion. Viewing grants no action: actions still come from their own keys, prices and supplier names follow `requests.viewPrices` and `requests.viewSupplierNames`, the timeline follows `requests.viewTimeline`, and a return reason is shown to the creator only. A request outside the viewer's scope is never listed and returns 404.
 
 ## Aging («متأخر»)
 

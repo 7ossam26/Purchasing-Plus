@@ -151,10 +151,7 @@ add(
   '/requests /requests/options /requests/:id /requests/:id/purchasing',
   'requests.view',
 );
-add('get', '/requests/:id/rounds/:n', 'requests.view', [
-  'pricing.approve',
-  'pricing.reject',
-]);
+add('get', '/requests/:id/rounds/:n', 'requests.view', 'requests.viewPrices');
 add('get', '/requests/recent-items', 'requests.create', 'catalog.view');
 add('get', '/requests/:id/timeline', 'requests.viewTimeline');
 add(
@@ -192,8 +189,6 @@ add('post', purchasing + '/items/:itemId/unavailable', 'purchasing.price');
 add('delete', purchasing + '/items/:itemId/unavailable', 'purchasing.price');
 add('put', purchasing + '/delivery-fee', 'purchasing.price');
 add('post', purchasing + '/submit-pricing', 'purchasing.price');
-add('post', '/requests/:id/rounds/:n/approve', 'pricing.approve');
-add('post', '/requests/:id/rounds/:n/reject', 'pricing.reject');
 add('get', '/requests/:id/supply-orders', 'purchasing.sendSupplyOrder');
 add('patch', '/requests/:id/supply-orders/:n', 'purchasing.sendSupplyOrder');
 add(

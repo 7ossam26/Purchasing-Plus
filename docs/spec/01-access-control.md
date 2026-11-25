@@ -65,18 +65,18 @@ Keys are stable identifiers; labels are what the editor shows. ✱ = `superadmin
 | Key | Label | Requires |
 |---|---|---|
 | `purchasing.sendRfq` | إرسال طلبات الأسعار للموردين | `requests.view`, `requests.viewSupplierNames` |
-| `purchasing.price` | تسعير البنود وإرسالها للاعتماد | `requests.view`, `requests.viewPrices`, `requests.viewSupplierNames` |
+| `purchasing.price` | تسعير البنود وإرسالها للمهندس للاستلام | `requests.view`, `requests.viewPrices`, `requests.viewSupplierNames` |
 | `purchasing.returnForEdit` | إرجاع الطلب للتعديل من المشتريات | `requests.view` |
 | `purchasing.sendSupplyOrder` | إرسال أوامر التوريد | `requests.view`, `requests.viewSupplierNames` |
 | `purchasing.handleRemaining` | التعامل مع البنود المتبقية | `requests.view`, `requests.viewPrices`, `requests.viewSupplierNames` |
 
-### الاعتماد والاستلام
+### الاستلام
 | Key | Label | Requires |
 |---|---|---|
-| `pricing.approve` | اعتماد التسعير | `requests.view`, `requests.viewPrices` |
-| `pricing.reject` | رفض التسعير | `requests.view`, `requests.viewPrices` |
 | `receipt.record` | تسجيل الاستلام | `requests.view` |
 | `items.resolveExternally` | تعليم بند «اتحل من المهندس» | `requests.view` |
+
+`pricing.approve` and `pricing.reject` were retired on 2026-11-25 with the pricing approval step (`retiredPermissionKeys` in the registry). The one-time direct-receipt migration removes them from stored roles with a signed audit row.
 
 ### التكويدات
 | Key | Label | Requires |
@@ -129,10 +129,10 @@ Create once, only if the roles table is empty. Afterwards the code never referen
 | Role | Scope | Keys |
 |---|---|---|
 | مهندس الموقع | ASSIGNED | requests.view, create, pause, editWhilePaused, viewTimeline, viewPrices, viewSupplierNames; receipt.record; items.resolveExternally; catalog.view |
-| مدير الموقع | ASSIGNED | requests.view, approve, reject, returnForEdit, raiseUrgency, editQuantities, pause, editWhilePaused, viewTimeline, viewPrices, viewSupplierNames; pricing.approve, pricing.reject; catalog.view; reports.* except userActivity; records.view |
+| مدير الموقع | ASSIGNED | requests.view, approve, reject, returnForEdit, raiseUrgency, editQuantities, pause, editWhilePaused, viewTimeline, viewPrices, viewSupplierNames; catalog.view; reports.* except userActivity; records.view |
 | مسؤول المشتريات | ALL | requests.view, viewTimeline, viewPrices, viewSupplierNames; purchasing.*; items.resolveExternally; catalog.view; suppliers.view; records.view |
-| المحاسب | ALL | requests.view, viewTimeline, viewPrices, viewSupplierNames; pricing.approve; reports.*; records.view; reports.export |
-| صاحب الشركة | ALL | every non-✱ key under الطلبات, الاعتماد, التقارير; masterData.view and all `*.view` |
+| المحاسب | ALL | requests.view, viewTimeline, viewPrices, viewSupplierNames; reports.*; records.view; reports.export (follows every request, approves nothing) |
+| صاحب الشركة | ALL | every non-✱ key under الطلبات, الاستلام, التقارير; masterData.view and all `*.view` |
 | مدير النظام | ALL | users.*, roles.*, settings.manage, data.*, masterData.view and every master-data key, requests.view, records.view |
 
 Also seed the five categories with suggested prefixes (كهربا ELC، صحي PLM، سيراميك CER، دهانات PNT، أوكر ومقابض HDW), a starter unit list (قطعة، متر، م²، م³، كرتونة، شيكارة، لتر، جالون، لفة، طقم، كيلو), and default settings.

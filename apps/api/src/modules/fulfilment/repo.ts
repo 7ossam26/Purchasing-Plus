@@ -58,6 +58,16 @@ export async function changeMessage(
   return { order, before };
 }
 
+// Unread notifications that asked someone to approve pricing lead to a task that no longer
+// exists. Marking them read takes them out of the bell; the rows stay for history.
+export function retireApprovalNotifications(tx: Tx, now: Date) {
+  return tx.notification.updateManyAndReturn({
+    where: { readAt: null, event: { type: 'PRICING_SUBMITTED' } },
+    data: { readAt: now },
+    select: { userId: true },
+  });
+}
+
 export async function persistFulfilment(
   tx: Tx,
   row: RequestRecord,

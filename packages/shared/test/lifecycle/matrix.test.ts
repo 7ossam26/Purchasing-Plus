@@ -87,8 +87,7 @@ const itemCases: Partial<
   markAvailable: { allowed: ['UNAVAILABLE'] },
   priceUnavailable: { allowed: ['UNAVAILABLE'] },
   submitPricing: { allowed: ['OPEN'], code: 'NO_PRICED_ITEMS' },
-  approvePricing: { allowed: ['AWAITING_APPROVAL'] },
-  rejectPricing: { allowed: ['AWAITING_APPROVAL'] },
+  releasePendingPricing: { allowed: ['AWAITING_APPROVAL'] },
   recordReceipt: { allowed: ['AWAITING_RECEIPT'] },
   stillComing: { allowed: ['REMAINING'] },
   repriceRemaining: { allowed: ['REMAINING'] },
@@ -128,7 +127,6 @@ it.each([
   'returnForEdit',
   'pause',
   'purchasingReturnForEdit',
-  'rejectPricing',
   'cancel',
 ] as const)('%s needs a nonblank reason', (name) => {
   const { state, who, input } = sample(name);
@@ -158,7 +156,7 @@ it('orders available actions by prominence and hides system, state and permissio
     const listed = availableActions(s.state, s.who ?? viewer).map(
       (a) => a.action,
     );
-    if (name === 'autoComplete') expect(listed).not.toContain(name);
+    if (cases[name].key === 'system') expect(listed).not.toContain(name);
     else expect(listed).toContain(name);
   }
   const empty = { ...state, status: 'DRAFT' as const, items: [] };

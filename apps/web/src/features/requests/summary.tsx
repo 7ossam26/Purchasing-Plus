@@ -28,11 +28,11 @@ import type {
   RequestLine,
 } from '../../lib/api/requests.js';
 
+// Six steps: submitted pricing goes straight from purchasing to receipt.
 const stages = [
   'DRAFT',
   'AWAITING_MANAGER',
   'AT_PURCHASING',
-  'AWAITING_APPROVAL',
   'AWAITING_RECEIPT',
   'REMAINING',
   'COMPLETED',
@@ -50,10 +50,11 @@ export function StageRail({
 }) {
   const terminal = stage === 'REJECTED' || stage === 'CANCELLED';
   const anchor = terminal ? (terminalFrom ?? 'AWAITING_MANAGER') : stage;
+  // A request rejected at the former pricing approval ended at the purchasing step.
   const step =
     anchor === 'RETURNED'
       ? 'AWAITING_MANAGER'
-      : anchor === 'PAUSED'
+      : anchor === 'PAUSED' || anchor === 'AWAITING_APPROVAL'
         ? 'AT_PURCHASING'
         : anchor;
   const index = stages.findIndex((id) => id === step);
@@ -63,7 +64,7 @@ export function StageRail({
       aria-label={copy.rail}
       className="relative grid gap-2 rounded-panel border border-seam bg-paper p-3 sm:p-4"
     >
-      <ol className="grid grid-cols-7 gap-1.5 sm:gap-2">
+      <ol className="grid grid-cols-6 gap-1.5 sm:gap-2">
         {stages.map((id, position) => {
           if (terminal && position > index) return null;
           const current = position === index;
@@ -253,14 +254,12 @@ export function ItemRows({
   renderActions,
   copyRejected,
   copyBusy,
-  showDeliveryFee = true,
 }: {
   request: RequestDto;
   convert?: (id: number) => void;
   renderActions?: (line: RequestLine) => ReactNode;
   copyRejected?: (ids: number[]) => void;
   copyBusy?: boolean;
-  showDeliveryFee?: boolean;
 }) {
   const canViewPrices = useCanOnSite('requests.viewPrices', request.siteId);
   const rejected = request.items.filter((line) => line.state === 'REJECTED');
@@ -345,7 +344,7 @@ export function ItemRows({
           {fulfilment.copyRejected}
         </Button>
       )}
-      {canViewPrices && showDeliveryFee && request.deliveryFee && (
+      {canViewPrices && request.deliveryFee && (
         <p className="rounded-control border border-seam bg-paper p-3 text-small">
           {copy.deliveryFee} <bdi>{formatMoney(request.deliveryFee)}</bdi>
         </p>

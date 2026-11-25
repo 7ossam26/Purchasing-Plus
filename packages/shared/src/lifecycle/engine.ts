@@ -34,7 +34,8 @@ export type NotifyIntent = Recipient & {
   siteId: number;
   requestId: number;
   event: EventType;
-  excludeUserId: number;
+  // Null for a system transition, which has no actor to leave out.
+  excludeUserId: number | null;
   excludeSuperadmins: true;
 };
 export function matchesRecipient(intent: NotifyIntent, viewer: Viewer) {
@@ -53,7 +54,8 @@ export interface Transition {
   notify: NotifyIntent[];
   priceRecords: {
     requestItemId: number;
-    source: 'APPROVED' | 'REPRICED';
+    // APPROVED records came from the former pricing approval and are never written now.
+    source: 'SUBMITTED' | 'APPROVED' | 'REPRICED';
     catalogItemId: number;
     supplierId: number;
     quantity: string;
@@ -74,9 +76,16 @@ export interface Context {
     system?: boolean,
   ): void;
 }
+// Submitted pricing goes straight to the site: the engineer who asked for it, whoever records
+// receipt there, and whoever sends the supply orders. There is no approval step to notify.
+const pricingSentRecipients: (state: RequestState) => Recipient[] = (state) => [
+  { userId: state.createdById },
+  { holdersOf: 'receipt.record' },
+  { holdersOf: 'purchasing.sendSupplyOrder' },
+];
 function notifications(
   state: RequestState,
-  actor: number,
+  actor: number | null,
   type: EventType,
   partial: boolean,
 ): NotifyIntent[] {
@@ -95,18 +104,11 @@ function notifications(
     case 'MANAGER_REJECTED':
     case 'RETURNED_FOR_EDIT':
     case 'PURCHASING_RETURNED':
-    case 'PRICING_REJECTED':
       recipients = [creator];
       break;
-    case 'PRICING_SUBMITTED':
-      recipients = [holder('pricing.approve')];
-      break;
-    case 'PRICING_APPROVED':
-      recipients = [
-        creator,
-        holder('receipt.record'),
-        holder('purchasing.sendSupplyOrder'),
-      ];
+    case 'PRICING_SENT_FOR_RECEIPT':
+    case 'PRICING_RELEASED':
+      recipients = pricingSentRecipients(state);
       break;
     case 'RECEIPT_RECORDED':
       recipients = partial ? [holder('purchasing.handleRemaining')] : [];
@@ -250,18 +252,17 @@ export function action<S extends z.ZodType<{ version: number }>>(
           at,
           actorId: system ? null : actor,
         } as EventDraft);
-        if (actor !== null)
-          result.notify.push(
-            ...notifications(
-              next,
-              actor,
-              type,
-              type === 'RECEIPT_RECORDED' &&
-                next.items.some(
-                  (i) => itemIds.includes(i.id) && i.state === 'REMAINING',
-                ),
-            ),
-          );
+        result.notify.push(
+          ...notifications(
+            next,
+            actor,
+            type,
+            type === 'RECEIPT_RECORDED' &&
+              next.items.some(
+                (i) => itemIds.includes(i.id) && i.state === 'REMAINING',
+              ),
+          ),
+        );
       },
     };
     change(ctx, parsed.data, viewer);

@@ -24,7 +24,7 @@ let siteId: number,
   alternate: number;
 let maker: User,
   worker: User,
-  decider: User,
+  accountant: User,
   receiver: User,
   sender: User,
   outsider: User,
@@ -32,8 +32,6 @@ let maker: User,
 const keys: PermissionKey[] = [
   'requests.approve',
   'purchasing.price',
-  'pricing.approve',
-  'pricing.reject',
   'receipt.record',
   'purchasing.handleRemaining',
   'purchasing.sendSupplyOrder',
@@ -98,9 +96,10 @@ beforeAll(async () => {
   alternate = await vendor('الثاني', '201101234567');
   maker = await user('creator', ['requests.create'], [siteId]);
   worker = await user('worker', keys, [siteId]);
-  decider = await user(
-    'decider',
-    ['pricing.approve', 'pricing.reject', 'catalog.view'],
+  // Follows prices without supplier names and has no workflow keys.
+  accountant = await user(
+    'accountant',
+    ['requests.viewPrices', 'catalog.view'],
     [siteId],
   );
   receiver = await user('receiver', ['receipt.record'], [siteId]);
@@ -157,7 +156,6 @@ const price = (
 const unavailable = (r: Row, itemId: number) =>
   write(r, '/purchasing' + linePath(itemId, 'unavailable'));
 const submit = (r: Row) => write(r, '/purchasing/submit-pricing');
-const approve = (r: Row, n = 1) => write(r, '/rounds/' + n + '/approve');
 const receipt = (r: Row, id: number, quantity: string) =>
   write(
     r,
@@ -218,14 +216,9 @@ async function notifications(id: number) {
       case 'MANAGER_APPROVED':
         expected = [];
         break;
-      case 'PRICING_SUBMITTED':
-        expected = [decider.id];
-        break;
-      case 'PRICING_APPROVED':
+      // The engineer who asked, whoever records receipt on the site, and the order senders.
+      case 'PRICING_SENT_FOR_RECEIPT':
         expected = [maker.id, receiver.id, sender.id, worker.id];
-        break;
-      case 'PRICING_REJECTED':
-        expected = [maker.id];
         break;
       case 'RECEIPT_RECORDED': {
         const payload = event.payload as { lines: { outstanding: string }[] };
@@ -268,13 +261,6 @@ const routes: {
   valid?: object;
   invalid?: object;
 }[] = [
-  { method: 'post', path: '/rounds/1/approve', valid: {} },
-  {
-    method: 'post',
-    path: '/rounds/1/reject',
-    valid: { reason: 'مرتفع' },
-    invalid: { reason: '  ' },
-  },
   {
     method: 'patch',
     path: '/supply-orders/1',
@@ -336,6 +322,9 @@ it('checks every fulfilment route for its grant, site scope, body and lifecycle 
   }
   await call(r, 'get', '/rounds/0').expect(422);
   await call(r, 'get', '/rounds/42').expect(404);
+  // Pricing approval was removed: its routes no longer exist.
+  for (const verb of ['approve', 'reject'])
+    await call(r, 'post', '/rounds/1/' + verb, { reason: 'x' }).expect(404);
   await http('get', root + '/0/supply-orders', worker).expect(422);
   const draft = (
     await http('post', root, maker, { siteId, categoryId: nodeId }).expect(201)
@@ -343,7 +332,7 @@ it('checks every fulfilment route for its grant, site scope, body and lifecycle 
   await call(draft, 'post', '/cancel', { reason: 'سبب' }).expect(409);
 });
 
-it('serializes competing approvers, freezes comparison prices, groups orders and marks each send once', async () => {
+it('serializes competing submissions, sends pricing straight to receipt, freezes comparison prices, groups orders and marks each send once', async () => {
   const item = await catalogItem();
   let r = await purchasing(3, item);
   const [a, b, c] = r.items.map((i: { id: number }) => i.id);
@@ -351,7 +340,35 @@ it('serializes competing approvers, freezes comparison prices, groups orders and
   r = await price(r, b, '10.00');
   r = await price(r, c, '20', alternate);
   r = await write(r, '/purchasing/delivery-fee', { deliveryFee: '80' }, 'put');
-  r = await submit(r);
+  expect(r).toMatchObject({ status: 'AT_PURCHASING', rounds: [] });
+  const responses = await Promise.all(
+    [1, 2].map(() => call(r, 'post', '/purchasing/submit-pricing')),
+  );
+  expect(responses.map((res) => res.status).sort()).toEqual([200, 409]);
+  r = responses.find((res) => res.status === 200)!.body;
+  expect(r).toMatchObject({
+    status: 'FULFILMENT',
+    displayedStage: 'AWAITING_RECEIPT',
+    items: [
+      { state: 'AWAITING_RECEIPT' },
+      { state: 'AWAITING_RECEIPT' },
+      { state: 'AWAITING_RECEIPT' },
+    ],
+    rounds: [
+      {
+        number: 1,
+        status: 'SUBMITTED',
+        decidedAt: null,
+        decidedBy: null,
+        roundTotal: '32.01',
+      },
+    ],
+  });
+  expect(
+    await db.auditLog.count({
+      where: { action: 'request.submitPricing', entityId: String(r.id) },
+    }),
+  ).toBe(1);
   expect(await viewRound(r)).toMatchObject({
     roundTotal: '32.01',
     deliveryFee: '80.00',
@@ -366,37 +383,19 @@ it('serializes competing approvers, freezes comparison prices, groups orders and
     roundTotal: '32.01',
     deliveryFee: '80.00',
   });
-  expect((await viewRound(r, 1, decider)).items[0]).not.toHaveProperty(
+  expect((await viewRound(r, 1, accountant)).items[0]).not.toHaveProperty(
     'supplier',
   );
-  const responses = await Promise.all(
-    [worker, decider].map((actor) =>
-      call(r, 'post', '/rounds/1/approve', {}, actor),
-    ),
-  );
-  expect(responses.map((res) => res.status).sort()).toEqual([200, 409]);
-  const winner = responses[0]!.status === 200 ? worker : decider;
-  r = responses.find((res) => res.status === 200)!.body;
-  expect(r.rounds[0]).toMatchObject({
-    status: 'APPROVED',
-    decidedBy: { id: winner.id },
-    decidedAt: expect.any(String),
-  });
-  expect(
-    await db.auditLog.count({
-      where: { action: 'request.approvePricing', entityId: String(r.id) },
-    }),
-  ).toBe(1);
   expect(await db.catalogItemPrice.count({ where: { requestId: r.id } })).toBe(
     1,
   );
   expect((await catalog(item)).latestPrice).toMatchObject({
     unitPrice: '1.01',
-    source: 'APPROVED',
+    source: 'SUBMITTED',
     supplier: { id: supplier },
     requestNumber: r.number,
   });
-  expect((await catalog(item, decider)).latestPrice).not.toHaveProperty(
+  expect((await catalog(item, accountant)).latestPrice).not.toHaveProperty(
     'supplier',
   );
   expect(await catalog(item, reader)).not.toHaveProperty('latestPrice');
@@ -407,7 +406,7 @@ it('serializes competing approvers, freezes comparison prices, groups orders and
       '&q=' +
       encodeURIComponent('رخام'),
   ]) {
-    const page = await http('get', path, decider).expect(200);
+    const page = await http('get', path, accountant).expect(200);
     const priced = page.body.items.find(
       (row: { id: number }) => row.id === item,
     );
@@ -460,7 +459,14 @@ it('serializes competing approvers, freezes comparison prices, groups orders and
     expect(redacted.supplyOrders[0]).not.toHaveProperty(key);
   expect(redacted.supplyOrders[0].items[0]).not.toHaveProperty('lineTotal');
   const events = await notifications(r.id);
-  expect(events.filter((e) => e.type === 'PRICING_APPROVED')).toHaveLength(1);
+  expect(
+    events.filter((e) => e.type === 'PRICING_SENT_FOR_RECEIPT'),
+  ).toHaveLength(1);
+  expect(
+    events.some((e) =>
+      ['PRICING_SUBMITTED', 'PRICING_APPROVED'].includes(e.type),
+    ),
+  ).toBe(false);
   expect(
     events.filter((e) => e.type === 'SUPPLY_ORDER_SENT_MARKED'),
   ).toHaveLength(2);
@@ -471,7 +477,6 @@ it('serializes competing approvers, freezes comparison prices, groups orders and
     lastPrice: { unitPrice: '1.01' },
     priceChange: { amount: '0.50', percent: '49.50' },
   });
-  next = await approve(next);
   r = await receipt(r, a, '1');
   r = await write(r, linePath(a, 'reprice'), {
     lineTotal: '0.25',
@@ -487,7 +492,7 @@ it('rolls back invalid receipt batches and records partials through all three re
   const item = await catalogItem();
   let r = await purchasing(2, item);
   const [a, b] = r.items.map((i: { id: number }) => i.id);
-  r = await approve(await submit(await price(await price(r, a, '24'), b, '2')));
+  r = await submit(await price(await price(r, a, '24'), b, '2'));
   const start = r;
   for (const lines of [
     [{ itemId: a, quantity: '0' }],
@@ -586,18 +591,27 @@ it('rolls back invalid receipt batches and records partials through all three re
   });
 });
 
-it('approves a later round while earlier lines are still awaiting receipt', async () => {
+it('submits a later round while earlier lines are still awaiting receipt', async () => {
   let r = await purchasing(2);
   const [first, second] = r.items.map((item: { id: number }) => item.id);
-  r = await approve(
-    await submit(await price(await unavailable(r, second), first, '8.00')),
-  );
+  r = await submit(await price(await unavailable(r, second), first, '8.00'));
+  expect(r.items).toMatchObject([
+    { state: 'AWAITING_RECEIPT' },
+    { state: 'UNAVAILABLE' },
+  ]);
   r = await submit(await price(r, second, '3.50', alternate));
-  await call(r, 'post', '/rounds/1/approve').expect(409);
-  r = await approve(r, 2);
   expect(r.rounds).toMatchObject([
-    { number: 1, status: 'APPROVED', roundTotal: '8.00' },
-    { number: 2, status: 'APPROVED', roundTotal: '3.50' },
+    { number: 1, status: 'SUBMITTED', roundTotal: '8.00' },
+    { number: 2, status: 'SUBMITTED', roundTotal: '3.50' },
+  ]);
+  expect(await viewRound(r, 2)).toMatchObject({
+    number: 2,
+    roundTotal: '3.50',
+    previousApprovedRounds: [{ number: 1, roundTotal: '8.00' }],
+  });
+  expect(r.supplyOrders).toMatchObject([
+    { number: 1, supplier: { id: supplier }, items: [{ itemId: first }] },
+    { number: 2, supplier: { id: alternate }, items: [{ itemId: second }] },
   ]);
   expect(r.items).toMatchObject([
     { state: 'AWAITING_RECEIPT' },
@@ -623,78 +637,11 @@ it('approves a later round while earlier lines are still awaiting receipt', asyn
   });
 });
 
-it('rejects only later-round lines and copies the selected rejected lines to a fresh draft', async () => {
-  let r = await purchasing(3);
-  const [a, b, c] = r.items.map((i: { id: number }) => i.id);
-  r = await unavailable(await unavailable(r, b), c);
-  r = await approve(await submit(await price(r, a, '12')));
-  r = await submit(await price(await price(r, b, '5'), c, '6'));
-  expect(r).toMatchObject({
-    status: 'FULFILMENT',
-    displayedStage: 'AWAITING_APPROVAL',
-    items: [
-      { state: 'AWAITING_RECEIPT' },
-      { state: 'AWAITING_APPROVAL' },
-      { state: 'AWAITING_APPROVAL' },
-    ],
-  });
-  expect(await viewRound(r, 2)).toMatchObject({
-    number: 2,
-    roundTotal: '11.00',
-    previousApprovedRounds: [{ number: 1, roundTotal: '12.00' }],
-  });
-  await call(r, 'post', '/rounds/2/reject', { reason: '  ' }).expect(422);
-  r = await write(
-    r,
-    '/rounds/2/reject',
-    { reason: 'أغلى من المعتمد' },
-    'post',
-    decider,
-  );
-  expect(r).toMatchObject({
-    status: 'FULFILMENT',
-    displayedStage: 'AWAITING_RECEIPT',
-    rounds: [
-      { status: 'APPROVED' },
-      {
-        status: 'REJECTED',
-        decidedBy: { id: decider.id, roleName: 'decider' },
-        reason: 'أغلى من المعتمد',
-      },
-    ],
-  });
-  await call(r, 'post', '/copy', { roundNo: 2, itemIds: [a, b] }, maker).expect(
-    422,
-  );
-  const copied = (
-    await call(r, 'post', '/copy', { itemIds: [b] }, maker).expect(201)
-  ).body;
-  expect(copied).toMatchObject({
-    status: 'DRAFT',
-    copiedFromId: r.id,
-    createdById: maker.id,
-    items: [{ otherName: r.items[1].otherName, state: 'OPEN' }],
-  });
-  r = (await call(r, 'get', '').expect(200)).body;
-  r = await receipt(r, a, '2');
-  expect(r.status).toBe('COMPLETED');
-  await notifications(r.id);
-});
-
-it('rejects the first round, retains partial receipts on cancel, and completes a wholly external request', async () => {
-  let r = await purchasing(2);
-  const [a, b] = r.items.map((i: { id: number }) => i.id);
-  r = await submit(await price(await unavailable(r, b), a, '5'));
-  r = await write(r, '/rounds/1/reject', { reason: 'مرفوض' });
-  expect(r.status).toBe('REJECTED');
-  expect((await notifications(r.id)).at(-1)).toMatchObject({
-    type: 'REJECTED_AUTO',
-    actorId: null,
-  });
+it('retains partial receipts on cancel and completes a wholly external request', async () => {
   let partial = await purchasing(1);
   const id = partial.items[0].id;
   partial = await receipt(
-    await approve(await submit(await price(partial, id, '4'))),
+    await submit(await price(partial, id, '4')),
     id,
     '0.25',
   );

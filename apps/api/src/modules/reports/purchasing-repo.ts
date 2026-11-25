@@ -6,14 +6,18 @@ import { during, type ReadRows } from './repo.js';
 const eligible = Prisma.sql`
   i.state NOT IN ('REJECTED', 'CANCELLED', 'REMOVED') AND r.status NOT IN ('REJECTED', 'CANCELLED')
 `;
+// Rounds that committed spending: submitted straight to the site (dated at submission), or
+// approved under the former approval step (dated at the decision).
+const committed = Prisma.sql`p.status IN ('SUBMITTED', 'APPROVED')`;
+const committedAt = Prisma.sql`coalesce(p."decidedAt", p."submittedAt")`;
 
 function approvedLines(period: ReportPeriod) {
   return Prisma.sql`
-    SELECT r.id AS "requestId", r."siteId", r."categoryId", p."decidedAt" AS at,
+    SELECT r.id AS "requestId", r."siteId", r."categoryId", ${committedAt} AS at,
       l."itemId", l."supplierId", l."lineTotal" AS amount
     FROM scoped r JOIN "PricingRound" p ON p."requestId" = r.id
       JOIN "PricingRoundItem" l ON l."roundId" = p.id JOIN "RequestItem" i ON i.id = l."itemId"
-    WHERE p.status = 'APPROVED' AND ${eligible} AND ${during(Prisma.sql`p."decidedAt"`, period)}
+    WHERE ${committed} AND ${eligible} AND ${during(committedAt, period)}
     UNION ALL
     SELECT r.id, r."siteId", r."categoryId", e.at, i.id,
       (e.payload->>'supplierId')::int, (e.payload->>'lineTotal')::numeric
@@ -27,14 +31,14 @@ export function spending(read: ReadRows, period: ReportPeriod, names: boolean) {
   const month = Prisma.sql`to_char((at AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Cairo', 'YYYY-MM')`;
   const amounts = Prisma.sql`,
     first_fee AS (
-      SELECT DISTINCT ON (r.id) r."siteId", r."categoryId", p."decidedAt" AS at, p."deliveryFee" AS fee
+      SELECT DISTINCT ON (r.id) r."siteId", r."categoryId", ${committedAt} AS at, p."deliveryFee" AS fee
       FROM scoped r JOIN "PricingRound" p ON p."requestId" = r.id
-      WHERE p.status = 'APPROVED' AND p."deliveryFee" IS NOT NULL
+      WHERE ${committed} AND p."deliveryFee" IS NOT NULL
         AND EXISTS (
           SELECT 1 FROM "PricingRoundItem" l JOIN "RequestItem" i ON i.id = l."itemId"
           WHERE l."roundId" = p.id AND ${eligible}
         )
-      ORDER BY r.id, p."decidedAt", p.number
+      ORDER BY r.id, ${committedAt}, p.number
     ), amounts AS (
       SELECT "siteId", "categoryId", at, ${names ? Prisma.sql`"supplierId"` : Prisma.sql`NULL::int`}
         AS "supplierId", amount, NULL::numeric AS fee
@@ -148,7 +152,7 @@ export function userActivity(
       SELECT e."actorId", e.type FROM scoped r JOIN "RequestEvent" e ON e."requestId" = r.id
       WHERE ${during(Prisma.sql`e.at`, period)} AND e."actorId" IS NOT NULL AND (
         e.type IN ('MANAGER_APPROVED', 'MANAGER_REJECTED', 'RETURNED_FOR_EDIT', 'PRICING_SUBMITTED',
-          'PRICING_APPROVED', 'PRICING_REJECTED', 'RECEIPT_RECORDED')
+          'PRICING_SENT_FOR_RECEIPT', 'PRICING_APPROVED', 'PRICING_REJECTED', 'RECEIPT_RECORDED')
         OR (e.type = 'EDITED' AND r."submittedAt" IS NOT NULL AND e.at >= r."submittedAt")
       )
     )
@@ -156,7 +160,7 @@ export function userActivity(
       count(*) FILTER (WHERE a.type = 'CREATED')::int AS created,
       count(*) FILTER (WHERE a.type = 'EDITED')::int AS edited,
       count(*) FILTER (WHERE a.type IN ('MANAGER_APPROVED', 'MANAGER_REJECTED', 'RETURNED_FOR_EDIT'))::int AS "managerDecisions",
-      count(*) FILTER (WHERE a.type = 'PRICING_SUBMITTED')::int AS "pricingSubmitted",
+      count(*) FILTER (WHERE a.type IN ('PRICING_SUBMITTED', 'PRICING_SENT_FOR_RECEIPT'))::int AS "pricingSubmitted",
       count(*) FILTER (WHERE a.type IN ('PRICING_APPROVED', 'PRICING_REJECTED'))::int AS "pricingDecisions",
       count(*) FILTER (WHERE a.type = 'RECEIPT_RECORDED')::int AS received
     FROM actions a JOIN "User" u ON u.id = a.actor

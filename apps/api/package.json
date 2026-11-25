@@ -17,7 +17,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prisma": "prisma",
-    "storage:check": "node dist/commands/storage-check.js"
+    "storage:check": "node dist/commands/storage-check.js",
+    "migrate:direct-receipt": "node dist/commands/direct-receipt-migration.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1173.0",

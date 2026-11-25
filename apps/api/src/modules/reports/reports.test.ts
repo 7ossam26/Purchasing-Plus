@@ -824,3 +824,112 @@ it('hides support accounts in user activity and its workbook', async () => {
     JSON.stringify((await exported(reader, path)).getSheetValues()),
   ).not.toContain(support.name);
 });
+
+it('counts pricing sent straight to receipt by its submission date, as a submission and never as an approval', async () => {
+  const june = (date: number, hour = 6) =>
+    new Date(Date.UTC(2026, 5, date, hour));
+  const [supplier, template] = await Promise.all([
+    db.supplier.findFirstOrThrow({ where: { name: 'مورد أول' } }),
+    db.requestItem.findFirstOrThrow({ where: { requestId } }),
+  ]);
+  const direct = await db.request.create({
+    data: {
+      number: '2026-006',
+      createdAt: june(1),
+      submittedAt: june(1),
+      status: 'FULFILMENT',
+      displayedStage: 'AWAITING_RECEIPT',
+      stageStartedAt: june(3, 9),
+      version: 4,
+      urgency: 'NORMAL',
+      urgencyLocked: false,
+      isModified: false,
+      siteId: local,
+      categoryId: rootId,
+      createdById: creatorId,
+      deliveryFee: '4.00',
+    },
+  });
+  const item = await db.requestItem.create({
+    data: {
+      requestId: direct.id,
+      lineNo: 1,
+      catalogItemId: catalogId,
+      nodeId: rootId,
+      snapshot: { name: 'سلك' },
+      specs: '',
+      quantity: '2.00',
+      unitId: template.unitId,
+      state: 'AWAITING_RECEIPT',
+      receivedQty: '0.00',
+      pickedAt: june(1),
+      modifiedAfterSend: false,
+      needsRepricing: false,
+      supplierId: supplier.id,
+      lineTotal: '64.00',
+    },
+  });
+  // A submitted round has no decision: it is dated by its submission.
+  await db.pricingRound.create({
+    data: {
+      requestId: direct.id,
+      number: 1,
+      status: 'SUBMITTED',
+      submittedAt: june(3, 9),
+      submittedById: creatorId,
+      deliveryFee: '4.00',
+      items: {
+        create: {
+          itemId: item.id,
+          lineNo: 1,
+          supplierId: supplier.id,
+          lineTotal: '64.00',
+          quantity: '2.00',
+          catalogItemId: catalogId,
+        },
+      },
+    },
+  });
+  await db.requestEvent.create({
+    data: {
+      requestId: direct.id,
+      type: 'PRICING_SENT_FOR_RECEIPT',
+      at: june(3, 9),
+      actorId: creatorId,
+      actorName: 'reader',
+      itemIds: [item.id],
+      payload: {},
+      stageAfter: 'AWAITING_RECEIPT',
+    },
+  });
+  const period = '?from=2026-06-03&to=2026-06-03';
+  const spend = await get(reader, 'reports/spending' + period).expect(200);
+  expect(
+    spend.body.metrics.map((metric: { value: string }) => metric.value),
+  ).toEqual(['64.00', '4.00']);
+  expect(spend.body.main.rows).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        month: '2026-06',
+        supplier: 'مورد أول',
+        amount: '64.00',
+      }),
+    ]),
+  );
+  const suppliers = await get(reader, 'reports/suppliers' + period).expect(200);
+  expect(suppliers.body.main.rows).toEqual([
+    expect.objectContaining({ supplier: 'مورد أول', won: 1, amount: '64.00' }),
+  ]);
+  const activity = await get(reader, 'reports/user-activity' + period).expect(
+    200,
+  );
+  expect(activity.body.main.rows).toEqual([
+    expect.objectContaining({
+      actor: 'reader',
+      pricingSubmitted: 1,
+      pricingDecisions: 0,
+    }),
+  ]);
+  const approvals = await get(reader, 'records/approvals' + period).expect(200);
+  expect(approvals.body.main.rows).toEqual([]);
+});

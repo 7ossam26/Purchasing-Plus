@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { defaultSettings } from '@purchasing-plus/shared';
 import { requestStatuses } from '@purchasing-plus/shared/lifecycle';
 import type { PermissionKey } from '@purchasing-plus/shared/permissions';
 import request from 'supertest';
@@ -108,6 +109,8 @@ const reason = { reason: 'سبب للاختبار' };
 
 beforeAll(async () => {
   await resetDb();
+  // Startup seeds this singleton; submitting pricing reads it to write supply orders.
+  await db.settings.create({ data: { id: 1, ...defaultSettings } });
   east = (await db.site.create({ data: { name: 'شرق' } })).id;
   west = (await db.site.create({ data: { name: 'غرب' } })).id;
   const node = await db.catalogNode.create({
@@ -246,7 +249,8 @@ it('lists every lifecycle state in the viewer’s sites with each request’s cu
   const stages = new Map(items.map((row) => [row.id, row.displayedStage]));
   expect(stages.get(byStatus.get('DRAFT')!)).toBe('DRAFT');
   expect(stages.get(byStatus.get('RETURNED')!)).toBe('RETURNED');
-  expect(stages.get(byStatus.get('FULFILMENT')!)).toBe('AWAITING_APPROVAL');
+  // Submitted pricing goes straight to the site: there is no approval stage in between.
+  expect(stages.get(byStatus.get('FULFILMENT')!)).toBe('AWAITING_RECEIPT');
   // The actionable queue remains narrower than the workspace.
   const queue = (
     await send('get', '?queue=purchasing&pageSize=100', pricer).expect(200)

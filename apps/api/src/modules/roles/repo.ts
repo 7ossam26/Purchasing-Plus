@@ -69,6 +69,29 @@ export function updateRole(
     include: roleInclude,
   });
 }
+// Roles still storing keys that left the registry, with their stored keys.
+export function rolesHoldingKeys(tx: Tx, keys: readonly string[]) {
+  return tx.role.findMany({
+    where: { permissions: { some: { key: { in: [...keys] } } } },
+    include: roleInclude,
+    orderBy: { id: 'asc' },
+  });
+}
+// Removes stored keys without touching the rest of the grant. Bumping updatedAt makes every
+// holder's cached permissions refresh on their next request.
+export function removeRoleKeys(tx: Tx, role: RoleRow, keys: readonly string[]) {
+  const updatedAt = new Date(
+    Math.max(Date.now(), role.updatedAt.getTime() + 1),
+  );
+  return tx.role.update({
+    where: { id: role.id },
+    data: {
+      updatedAt,
+      permissions: { deleteMany: { key: { in: [...keys] } } },
+    },
+    include: roleInclude,
+  });
+}
 export function deleteRole(tx: Tx, id: number) {
   return tx.role.delete({ where: { id } });
 }

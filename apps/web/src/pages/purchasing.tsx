@@ -5,7 +5,7 @@ import {
   requestUi,
 } from '@purchasing-plus/shared/i18n/ar';
 import {
-  displayedStages,
+  activeStages,
   purchasingQueueRules,
   statusMap,
   type DisplayedStage,
@@ -31,7 +31,7 @@ const purchasingStatuses = new Set<RequestStatus>(
   purchasingQueueRules.map((rule) => rule.status),
 );
 const isStage = (value: string | null): value is DisplayedStage =>
-  displayedStages.some((stage) => stage === value);
+  activeStages.some((stage) => stage === value);
 
 export function PurchasingPage() {
   const [params, setParams] = useSearchParams();
@@ -72,7 +72,7 @@ export function PurchasingPage() {
               onChange={(event) => update('stage', event.currentTarget.value)}
             >
               <option value="">{requestUi.allStages}</option>
-              {displayedStages.map((id) => (
+              {activeStages.map((id) => (
                 <option key={id} value={id}>
                   {statusMap[id].label}
                 </option>

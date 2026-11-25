@@ -1,6 +1,6 @@
 import { ar, requestUi as copy } from '@purchasing-plus/shared/i18n/ar';
 import {
-  displayedStages,
+  activeStages,
   statusMap,
   urgencies,
 } from '@purchasing-plus/shared/lifecycle';
@@ -119,7 +119,7 @@ export function RequestsPage() {
             'stage',
             copy.stage,
             copy.allStages,
-            displayedStages.map((id) => ({ id, name: statusMap[id].label })),
+            activeStages.map((id) => ({ id, name: statusMap[id].label })),
           )}
           {select(
             'siteId',

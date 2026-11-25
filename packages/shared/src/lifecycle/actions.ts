@@ -8,7 +8,6 @@ export const actions = {
   approve: request.approve,
   resume: request.resume,
   submitPricing: buying.submitPricing,
-  approvePricing: buying.approvePricing,
   recordReceipt: buying.recordReceipt,
   saveDraft: request.saveDraft,
   editBeforeApproval: request.editBeforeApproval,
@@ -34,7 +33,7 @@ export const actions = {
   copyRequest: request.copyRequest,
   addToCatalog: request.addToCatalog,
   reject: request.reject,
-  rejectPricing: buying.rejectPricing,
+  releasePendingPricing: buying.releasePendingPricing,
   cancel: request.cancel,
   deleteDraft: request.deleteDraft,
   autoComplete: request.autoComplete,
@@ -96,10 +95,10 @@ export const { can: canMarkAvailable, apply: applyMarkAvailable } =
   actions.markAvailable;
 export const { can: canSubmitPricing, apply: applySubmitPricing } =
   actions.submitPricing;
-export const { can: canApprovePricing, apply: applyApprovePricing } =
-  actions.approvePricing;
-export const { can: canRejectPricing, apply: applyRejectPricing } =
-  actions.rejectPricing;
+export const {
+  can: canReleasePendingPricing,
+  apply: applyReleasePendingPricing,
+} = actions.releasePendingPricing;
 export const { can: canPriceUnavailable, apply: applyPriceUnavailable } =
   actions.priceUnavailable;
 export const {

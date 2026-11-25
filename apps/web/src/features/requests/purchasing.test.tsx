@@ -194,7 +194,7 @@ function setup(fixture: Fixture = {}, path = '/purchasing') {
       site,
       category,
       creator: { id: 7, name: 'مينا' },
-      displayedStage: status === 'FULFILMENT' ? 'AWAITING_APPROVAL' : status,
+      displayedStage: status === 'FULFILMENT' ? 'AWAITING_RECEIPT' : status,
       stageStartedAt: now,
       availableActions,
       deliveryFee: fee,
@@ -363,7 +363,7 @@ function setup(fixture: Fixture = {}, path = '/purchasing') {
     else if (path === buyingPath + '/submit-pricing') {
       status = 'FULFILMENT';
       items = items.map((item) =>
-        item.lineTotal ? { ...item, state: 'AWAITING_APPROVAL' } : item,
+        item.lineTotal ? { ...item, state: 'AWAITING_RECEIPT' } : item,
       );
     } else if (path.endsWith('/pause') || path.endsWith('/purchasing-return'))
       status = 'PAUSED';
@@ -535,6 +535,11 @@ it('autosaves quote and fee separately, searches outside the category, toggles a
   expect(panel.getByText(copy.separateFee)).toBeTruthy();
   fireEvent.click(panel.getByRole('button', { name: copy.submit }));
   const confirm = dialog(copy.submitQuestion);
+  // The final action says where the pricing goes: straight to the engineer for receipt.
+  expect(confirm.getByText(copy.submitConsequence)).toBeTruthy();
+  expect(
+    confirm.getByRole('button', { name: 'إرسال للمهندس للاستلام' }),
+  ).toBeTruthy();
   expect(
     confirm.getByText(copy.pricedCount).parentElement?.textContent,
   ).toContain('1');

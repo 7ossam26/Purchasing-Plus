@@ -575,6 +575,7 @@ export function PricingMode({
         <Modal
           open
           title={copy.submitQuestion}
+          description={copy.submitConsequence}
           dismissible={!submit.isPending}
           onClose={() => setReview(false)}
         >

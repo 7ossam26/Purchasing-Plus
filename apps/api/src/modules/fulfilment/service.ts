@@ -4,7 +4,7 @@ import {
   unitPrice,
 } from '@purchasing-plus/shared/lifecycle';
 
-import { allowed, forbidden, missing } from '../../middleware/access.js';
+import { allowed, missing } from '../../middleware/access.js';
 import type { Context } from '../access/endpoint.js';
 import { toPriceDto } from '../catalog/prices.js';
 import { latestPrices } from '../catalog/repo.js';
@@ -20,8 +20,6 @@ export async function getRound(
   readNumber: () => number,
 ) {
   const { tx, viewer } = ctx;
-  if (!allowed(viewer, 'pricing.approve') && !allowed(viewer, 'pricing.reject'))
-    throw forbidden();
   const row = await loadRequestInScope(tx, id, viewer);
   const number = readNumber();
   const round = await repo.roundDetails(tx, id, number);
@@ -38,8 +36,11 @@ export async function getRound(
   return {
     ...summaries.find((summary) => summary.number === number),
     version: row.version,
+    // Earlier rounds that reached the site, whether submitted directly or approved historically.
     previousApprovedRounds: summaries.filter(
-      (summary) => summary.number < number && summary.status === 'APPROVED',
+      (summary) =>
+        summary.number < number &&
+        (summary.status === 'SUBMITTED' || summary.status === 'APPROVED'),
     ),
     items: round.items.map((line) => {
       const item = requestItems.get(line.itemId)!;

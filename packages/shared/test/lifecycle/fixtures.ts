@@ -175,16 +175,10 @@ export const cases = {
     item: 'UNAVAILABLE',
   },
   submitPricing: { key: 'purchasing.price', statuses: pricing, input: base },
-  approvePricing: {
-    key: 'pricing.approve',
+  releasePendingPricing: {
+    key: 'system',
     statuses: ['FULFILMENT'],
-    input: { ...base, roundNo: 1 },
-    item: 'AWAITING_APPROVAL',
-  },
-  rejectPricing: {
-    key: 'pricing.reject',
-    statuses: ['FULFILMENT'],
-    input: { ...reason, roundNo: 1 },
+    input: base,
     item: 'AWAITING_APPROVAL',
   },
   priceUnavailable: {
@@ -273,7 +267,7 @@ export function sample(name: ActionName) {
   });
   if (name === 'markBatchSent' || name === 'editBatchMessage')
     s.batches.push({ id: 3, itemIds: [11], supplierIds: [8], sentTo: [] });
-  if (name === 'approvePricing' || name === 'rejectPricing')
+  if (name === 'releasePendingPricing')
     s.rounds.push({
       number: 1,
       status: 'PENDING',

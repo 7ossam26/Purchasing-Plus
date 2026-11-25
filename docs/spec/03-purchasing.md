@@ -29,21 +29,21 @@ Default `settings.rfqIntro`: «السلام عليكم، ممكن سعر للآ�
 
 - Per item: **supplier** (picker lists the category's suppliers; a «كل الموردين» toggle searches all active suppliers) and **line total** — the final amount for the whole quantity, VAT included. The officer never types a unit price. The UI shows the derived unit price under it in muted text («= 125.00 للوحدة»).
 - Only the chosen supplier and amount are recorded. Other quotes stay in WhatsApp.
-- «غير متوفر» toggle per item with an optional note. Unavailable items stay with purchasing until priced (→ new approval round) or resolved externally.
+- «غير متوفر» toggle per item with an optional note. Unavailable items stay with purchasing until priced (→ a later submission, straight to receipt) or resolved externally.
 - **Delivery fee** (رسوم التوصيل): one optional amount per request, entered at the end, in its own field next to the submit button. Displayed everywhere as a separate line under the total with the note «منفصلة عن الإجمالي». Never added to any total, including reports.
 - Pricing drafts autosave per item. The request total = sum of line totals of priced items.
-- **«إرسال للاعتماد»** requires at least one priced item. A confirmation sheet shows: priced count, unavailable count, total, delivery fee, items still `needsRepricing` (blocking until priced or marked unavailable).
+- **«إرسال للمهندس للاستلام»** requires at least one priced item. A confirmation sheet says that the priced items go straight to the site engineer for receipt, with a supply order per supplier and no approval step, and shows: priced count, unavailable count, total, delivery fee, items still `needsRepricing` (blocking until priced or marked unavailable). Saving prices before that never moves the request out of pricing.
 - Money: `Decimal(14,2)` in the database, decimal strings in JSON, `decimal.js` for arithmetic. Unit price = lineTotal ÷ quantity, rounded half-up to 2 places for display and for the catalog price record.
 
-## Pricing approval (اعتماد التسعير)
+## Pricing history (جولات التسعير)
 
-The approver sees the round: each item with supplier, line total, derived unit price, the round total, the delivery fee (separate), previously approved rounds (collapsed), and the item's last catalog price with the difference (▲/▼ and percentage) when there is one. Buttons: «اعتماد التسعير» (`pricing.approve`), «رفض التسعير» (`pricing.reject`, reason required). The request header then shows «اعتمد بواسطة {name} ({role}) — {date}».
+There is no pricing approval step (removed 2026-11-25). Holders of `requests.viewPrices` see a read-only list of rounds, newest first, each with its outcome («اتبعت للمهندس للاستلام», or for history «اتعمدت» / «اترفضت»). A round shows each item with supplier (with `requests.viewSupplierNames`), line total, derived unit price, the round total, the delivery fee (separate), and the item's last catalog price with the difference (▲/▼ and percentage), frozen when the round was submitted. Rounds decided under the former step keep «اعتمد بواسطة {name} ({role}) — {date}» or «رفض بواسطة …» in the request header.
 
 ## Supply orders (أوامر التوريد)
 
-- Created automatically when a round is approved (one per supplier, with that supplier's approved items) and when remaining items are re-priced to a different supplier.
+- Created automatically when pricing is submitted (one per supplier, with that supplier's submitted items) and when remaining items are re-priced to a different supplier.
 - Same send pattern as batches: editable message, «افتح واتساب», «نسخ الرسالة», «تم الإرسال».
-- Default `settings.supplyOrderIntro`: «السلام عليكم، تم اعتماد طلب {requestNumber}. برجاء توريد الآتي إلى موقع {siteName} – {siteAddress}:» followed by `{lineNo}) {name} – {specs} – {quantity} {unit}` lines.
+- Default `settings.supplyOrderIntro`: «السلام عليكم، تم إصدار أمر توريد للطلب {requestNumber}. برجاء توريد الآتي إلى موقع {siteName} – {siteAddress}:» followed by `{lineNo}) {name} – {specs} – {quantity} {unit}` lines. A stored template still equal to the former default («تم اعتماد طلب …») moves to this one during the direct-receipt migration; custom templates and messages already written are kept.
 - Sending a supply order never blocks receipt.
 
 ## Receipt (الاستلام)

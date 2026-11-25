@@ -33,7 +33,7 @@
 
 ### Price records
 
-`CatalogItemPrice`: item, unit price, supplier, request, request item, source (`APPROVED` | `REPRICED`), timestamp. Appended on pricing approval (T17) and on re-pricing remaining items (T22). The latest record is the catalog price. Feeds the price-history report. Prices are visible only with `requests.viewPrices`; supplier names only with `requests.viewSupplierNames`.
+`CatalogItemPrice`: item, unit price, supplier, request, request item, source (`SUBMITTED` | `REPRICED`; `APPROVED` in history from the removed approval step), timestamp. Appended when pricing is submitted (T16) and on re-pricing remaining items (T22). The latest record is the catalog price. Feeds the price-history report. Prices are visible only with `requests.viewPrices`; supplier names only with `requests.viewSupplierNames`.
 
 ### From «أخرى» to the catalog
 

@@ -36,8 +36,9 @@ import {
 } from '../../middleware/access.js';
 import { AppError } from '../../middleware/errors.js';
 import type { Context } from '../access/endpoint.js';
+import type { Tx } from '../access/repo.js';
 import { addItem, itemsByIds } from '../catalog/service.js';
-import type { EventBus } from '../events/bus.js';
+import type { EventBus, LiveSignal } from '../events/bus.js';
 import { persistFulfilment } from '../fulfilment/repo.js';
 import { persistRounds } from '../purchasing/repo.js';
 
@@ -82,33 +83,50 @@ async function activeCategory(ctx: Context, categoryId: number) {
   if (!(await repo.findCategory(ctx.tx, categoryId)))
     throw new AppError(422, 'INVALID_CATEGORY', ar.requests.invalidCategory);
 }
-async function appendEffects(ctx: Context, result: Transition) {
-  if (!result.events.length) return;
-  const actor = await repo.findActor(ctx.tx, ctx.viewer.userId);
+type ActorSnapshot = { name: string; roleName: string | null };
+// Timeline rows and their notification rows, in the caller's transaction.
+async function writeEffects(
+  tx: Tx,
+  now: Date,
+  result: Transition,
+  actor: ActorSnapshot | null,
+  notified: (userId: number) => void,
+) {
   for (const event of result.events) {
-    const human = event.actorId !== null;
+    const human = event.actorId !== null && actor !== null;
     const row = await repo.appendEvent(
-      ctx.tx,
+      tx,
       event,
       human ? actor.name : null,
-      human
-        ? actor.isSuperadmin
-          ? ar.requests.support
-          : (actor.role?.name ?? null)
-        : null,
+      human ? actor.roleName : null,
     );
     const recipients = await repo.appendNotifications(
-      ctx.tx,
+      tx,
       row.id,
       result.notify.filter(
         (intent) =>
           intent.event === event.type && intent.requestId === event.requestId,
       ),
-      ctx.now,
+      now,
     );
-    for (const { userId } of recipients)
-      publishAfterCommit(ctx, { type: 'notification', userId });
+    for (const { userId } of recipients) notified(userId);
   }
+}
+async function appendEffects(ctx: Context, result: Transition) {
+  if (!result.events.length) return;
+  const actor = await repo.findActor(ctx.tx, ctx.viewer.userId);
+  await writeEffects(
+    ctx.tx,
+    ctx.now,
+    result,
+    {
+      name: actor.name,
+      roleName: actor.isSuperadmin
+        ? ar.requests.support
+        : (actor.role?.name ?? null),
+    },
+    (userId) => publishAfterCommit(ctx, { type: 'notification', userId }),
+  );
 }
 
 function publishAfterCommit(
@@ -233,6 +251,52 @@ export async function runTransition<
     if (error instanceof LifecycleError) throw appError(error);
     throw error;
   }
+}
+
+export type SystemContext = {
+  tx: Tx;
+  now: Date;
+  audit: Context['audit'];
+  // Live signals to publish once the caller's transaction commits.
+  signals: LiveSignal[];
+};
+// Jobs and one-time migrations run lifecycle system actions (no viewer) through the same
+// persistence as user transitions: request state, rounds, supply orders, catalog prices,
+// timeline, notifications and audit, all in the caller's single transaction.
+export async function runSystemTransition<A extends ActionName>(
+  sys: SystemContext,
+  requestId: number,
+  actionName: A,
+  input: Omit<ActionInput<A>, 'version'>,
+) {
+  const { tx, now } = sys;
+  const row = await repo.loadRequestForSystem(tx, requestId);
+  if (!row) return { ok: false as const, code: 'NOT_FOUND' as const };
+  const previous = repo.toState(row);
+  const action = actions[actionName] as Command<A>;
+  const command = { ...input, version: previous.version } as ActionInput<A>;
+  const verdict = action.can(previous, null, command);
+  if (!verdict.ok) return verdict;
+  const result = action.apply(previous, null, command, now);
+  await repo.updateRequest(tx, row, previous, result.next, now);
+  await persistRounds(tx, previous, result.next, null, now);
+  await persistFulfilment(tx, row, result, now);
+  await writeEffects(tx, now, result, null, (userId) =>
+    sys.signals.push({ type: 'notification', userId }),
+  );
+  await sys.audit(
+    'request.' + actionName,
+    'Request',
+    requestId,
+    previous,
+    result.next,
+  );
+  sys.signals.push({
+    type: 'request.changed',
+    requestId,
+    siteId: result.next.siteId,
+  });
+  return { ok: true as const, result };
 }
 
 export function save(

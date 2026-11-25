@@ -500,11 +500,10 @@ it('shows only the higher urgency choice after a lock', async () => {
 it('marks completed, current and future rail segments with a returned marker on the manager step', () => {
   render(<StageRail stage="RETURNED" at={null} />);
   const segments = screen.getAllByRole('listitem');
-  expect(segments).toHaveLength(7);
+  expect(segments).toHaveLength(6);
   expect(segments.map((item) => item.dataset.state)).toEqual([
     'completed',
     'current',
-    'future',
     'future',
     'future',
     'future',
@@ -513,6 +512,74 @@ it('marks completed, current and future rail segments with a returned marker on 
   expect(segments[1]?.getAttribute('aria-current')).toBe('step');
   expect(segments[1]?.querySelector('.rotate-45')).toBeTruthy();
   expect(screen.getByText(statusMap.RETURNED.label)).toBeTruthy();
+});
+
+it('goes from purchasing straight to receipt on the rail, with no pricing approval step', () => {
+  render(<StageRail stage="AWAITING_RECEIPT" at={null} />);
+  const segments = screen.getAllByRole('listitem');
+  expect(segments.map((item) => item.getAttribute('aria-label'))).toEqual(
+    [
+      'DRAFT',
+      'AWAITING_MANAGER',
+      'AT_PURCHASING',
+      'AWAITING_RECEIPT',
+      'REMAINING',
+      'COMPLETED',
+    ].map((id) => expect.stringContaining(statusMap[id as 'DRAFT'].label)),
+  );
+  expect(segments[3]?.getAttribute('aria-current')).toBe('step');
+  expect(screen.queryByText(statusMap.AWAITING_APPROVAL.label)).toBeNull();
+  cleanup();
+  // A request rejected at the former approval step ends the rail at purchasing.
+  render(
+    <StageRail stage="REJECTED" at={null} terminalFrom="AWAITING_APPROVAL" />,
+  );
+  expect(
+    screen.getAllByRole('listitem').map((item) => item.dataset.state),
+  ).toEqual(['completed', 'completed', 'current']);
+});
+
+it('opens someone else’s draft read-only for a stakeholder who follows the site', async () => {
+  const { router, saved, sent } = setup('/requests/10', {
+    initial: {
+      ...initial,
+      createdById: 99,
+      creator: { id: 99, name: 'مهندس الموقع' },
+      items: [
+        requestLine(
+          { catalogItemId: item.id, quantity: '3', specs: 'أبيض مط' },
+          0,
+        ),
+      ],
+      availableActions: [],
+    },
+    permissions: [
+      'requests.view',
+      'requests.viewPrices',
+      'requests.viewSupplierNames',
+      'requests.viewTimeline',
+    ],
+  });
+  expect(
+    await screen.findByRole('heading', { name: statusMap.DRAFT.label }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole('heading', { name: item.name, level: 2 }),
+  ).toBeTruthy();
+  expect(screen.getByText('مهندس الموقع', { exact: false })).toBeTruthy();
+  expect(screen.getByRole('tab', { name: copy.timeline })).toBeTruthy();
+  for (const label of [
+    copy.continueDraft,
+    copy.deleteDraft,
+    copy.submit,
+    copy.edit,
+    copy.copy,
+  ])
+    expect(screen.queryByRole('button', { name: label })).toBeNull();
+  expect(screen.queryByRole('button', { name: ar.common.more })).toBeNull();
+  expect(router.state.location.pathname).toBe('/requests/10');
+  expect(saved).toEqual([]);
+  expect(sent).toEqual([]);
 });
 
 it('shows a returned note to the creator while keeping the timeline hidden without the key', async () => {

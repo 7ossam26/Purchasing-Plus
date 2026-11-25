@@ -137,10 +137,13 @@ model RequestItem {
   @@index([nodeId])
 }
 
+// SUBMITTED rounds go straight to receipt. PENDING, APPROVED and REJECTED are history from the
+// removed pricing approval step; PENDING rounds are released by the one-time workflow migration.
 enum PricingRoundStatus {
   PENDING
   APPROVED
   REJECTED
+  SUBMITTED
 }
 
 model RfqBatch {
@@ -548,6 +551,7 @@ model CatalogItemAttributeValue {
 enum CatalogPriceSource {
   APPROVED
   REPRICED
+  SUBMITTED
 }
 
 model CatalogItemPrice {

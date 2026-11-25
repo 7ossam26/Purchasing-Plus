@@ -60,7 +60,6 @@ export const queueNames = [
   'drafts',
   'manager',
   'purchasing',
-  'pricingApproval',
   'receipt',
   'paused',
 ] as const;
@@ -108,13 +107,6 @@ export const queueRules: Record<Queue, readonly QueueRule[]> = {
   ],
   manager: [{ status: 'AWAITING_MANAGER', anyOf: ['requests.approve'] }],
   purchasing: purchasingQueueRules,
-  pricingApproval: [
-    {
-      status: 'FULFILMENT',
-      items: ['AWAITING_APPROVAL'],
-      anyOf: ['pricing.approve'],
-    },
-  ],
   receipt: [
     {
       status: 'FULFILMENT',

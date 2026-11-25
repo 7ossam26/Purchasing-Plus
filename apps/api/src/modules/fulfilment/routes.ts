@@ -40,25 +40,13 @@ function command<A extends ActionName>(
   );
 }
 
+// Read-only pricing history. Submitted pricing goes straight to receipt, so there is nothing
+// left to approve or reject here.
 fulfilment.get(
   '/rounds/:n',
-  ...endpoint(['requests.view'], (ctx) =>
+  ...endpoint(['requests.view', 'requests.viewPrices'], (ctx) =>
     service.getRound(ctx, param(ctx, 'id'), () => param(ctx, 'n')),
   ),
-);
-fulfilment.post(
-  '/rounds/:n/approve',
-  ...command('approvePricing', 'pricing.approve', (ctx) => ({
-    ...version(ctx),
-    roundNo: param(ctx, 'n'),
-  })),
-);
-fulfilment.post(
-  '/rounds/:n/reject',
-  ...command('rejectPricing', 'pricing.reject', (ctx) => ({
-    ...reason(ctx),
-    roundNo: param(ctx, 'n'),
-  })),
 );
 fulfilment.get(
   '/supply-orders',

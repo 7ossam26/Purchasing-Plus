@@ -30,9 +30,14 @@ export type Settings = z.output<typeof settingsSchema>;
 export const defaultSettings: Settings = {
   rfqIntro: 'السلام عليكم، ممكن سعر للآتي؟ (طلب {requestNumber})',
   supplyOrderIntro:
-    'السلام عليكم، تم اعتماد طلب {requestNumber}. برجاء توريد الآتي إلى موقع {siteName} – {siteAddress}:',
+    'السلام عليكم، تم إصدار أمر توريد للطلب {requestNumber}. برجاء توريد الآتي إلى موقع {siteName} – {siteAddress}:',
   agingDays: 3,
 };
+// Earlier shipped defaults. A stored template still equal to one of these was never customized,
+// so the direct-receipt migration moves it to the current default; any other text is kept.
+export const previousSupplyOrderIntros = [
+  'السلام عليكم، تم اعتماد طلب {requestNumber}. برجاء توريد الآتي إلى موقع {siteName} – {siteAddress}:',
+] as const;
 
 export function renderTemplate(
   template: string,

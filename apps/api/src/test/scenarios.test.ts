@@ -29,7 +29,7 @@ let siteId: number, nodeId: number, unitId: number, supplierId: number;
 let engineer: User,
   manager: User,
   buyer: User,
-  approver: User,
+  accountant: User,
   receiver: User,
   reader: User,
   historian: User;
@@ -91,22 +91,14 @@ beforeAll(async () => {
     'purchasing.handleRemaining',
     'purchasing.returnForEdit',
   ]);
-  approver = await account('decider', [
-    'pricing.approve',
-    'pricing.reject',
-    'receipt.record',
-  ]);
+  // Follows prices on the site without any workflow key.
+  accountant = await account('accountant', ['requests.viewPrices']);
   receiver = await account('receiver', ['receipt.record']);
   reader = await account('observer', ['requests.approve', 'receipt.record']);
   historian = await account('history', ['requests.viewTimeline']);
   await account(
     'outside',
-    [
-      'requests.approve',
-      'purchasing.price',
-      'pricing.approve',
-      'receipt.record',
-    ],
+    ['requests.approve', 'purchasing.price', 'receipt.record'],
     [],
   );
 });
@@ -127,12 +119,9 @@ function recipients(type: string, partial: boolean): User[] {
       return [buyer];
     case 'RETURNED_FOR_EDIT':
     case 'PURCHASING_RETURNED':
-    case 'PRICING_REJECTED':
       return [engineer];
-    case 'PRICING_SUBMITTED':
-      return [approver];
-    case 'PRICING_APPROVED':
-      return [engineer, receiver, approver, buyer, reader];
+    case 'PRICING_SENT_FOR_RECEIPT':
+      return [engineer, receiver, buyer, reader];
     case 'RECEIPT_RECORDED':
       return partial ? [buyer] : [];
     default:
@@ -258,11 +247,7 @@ async function scenario(count = 1) {
       ),
     submit: () =>
       step(buyer, 'post', '/purchasing/submit-pricing', {}, [
-        'PRICING_SUBMITTED',
-      ]),
-    accept: (n = 1) =>
-      step(approver, 'post', '/rounds/' + n + '/approve', {}, [
-        'PRICING_APPROVED',
+        'PRICING_SENT_FOR_RECEIPT',
       ]),
     receipt: (
       index: number,
@@ -281,17 +266,16 @@ async function scenario(count = 1) {
       ),
   };
 }
-it('carries a sent quote through approval, a partial receipt, still-coming and completion', async () => {
+it('carries a sent quote straight from pricing to receipt, a partial receipt, still-coming and completion', async () => {
   const s = await scenario();
   await s.approve();
   await s.batch();
   await s.price();
   expect(await s.submit()).toMatchObject({
     status: 'FULFILMENT',
-    items: [{ state: 'AWAITING_APPROVAL' }],
-  });
-  expect(await s.accept()).toMatchObject({
+    displayedStage: 'AWAITING_RECEIPT',
     items: [{ state: 'AWAITING_RECEIPT' }],
+    rounds: [{ number: 1, status: 'SUBMITTED' }],
   });
   await s.step(buyer, 'post', '/supply-orders/1/sent', {}, [
     'SUPPLY_ORDER_SENT_MARKED',
@@ -309,72 +293,57 @@ it('carries a sent quote through approval, a partial receipt, still-coming and c
     items: [{ state: 'RECEIVED', receivedQty: '2.00' }],
   });
 });
-it.each([true, false])(
-  'finishes an unavailable second round, approved=%s',
-  async (approved) => {
-    const s = await scenario(3);
-    await s.approve();
-    await s.unavailable(1);
-    await s.unavailable(2);
-    await s.price();
-    await s.submit();
-    await s.accept();
-    expect(
-      await s.step(
-        engineer,
-        'post',
-        '/items/' + s.ids[2] + '/resolve-externally',
-        {},
-        ['ITEM_RESOLVED_EXTERNALLY'],
-      ),
-    ).toMatchObject({
-      items: [
-        { state: 'AWAITING_RECEIPT' },
-        { state: 'UNAVAILABLE' },
-        { state: 'RESOLVED_EXTERNALLY' },
-      ],
-    });
-    await s.price(1, true);
-    await s.submit();
-    if (approved) {
-      await s.accept(2);
-      await s.receipt(1, '2');
-    } else
-      expect(
-        await s.step(
-          approver,
-          'post',
-          '/rounds/2/reject',
-          { reason: 'مرتفع' },
-          ['PRICING_REJECTED'],
-        ),
-      ).toMatchObject({ status: 'FULFILMENT' });
-    expect(await s.receipt(0, '2', true)).toMatchObject({
-      status: 'COMPLETED',
-      items: [
-        { state: 'RECEIVED' },
-        { state: approved ? 'RECEIVED' : 'REJECTED' },
-        { state: 'RESOLVED_EXTERNALLY' },
-      ],
-    });
-  },
-);
-it('rejects the first round and links both sides of the copied draft', async () => {
+it('finishes an unavailable line through a second submitted round', async () => {
+  const s = await scenario(3);
+  await s.approve();
+  await s.unavailable(1);
+  await s.unavailable(2);
+  await s.price();
+  await s.submit();
+  expect(
+    await s.step(
+      engineer,
+      'post',
+      '/items/' + s.ids[2] + '/resolve-externally',
+      {},
+      ['ITEM_RESOLVED_EXTERNALLY'],
+    ),
+  ).toMatchObject({
+    items: [
+      { state: 'AWAITING_RECEIPT' },
+      { state: 'UNAVAILABLE' },
+      { state: 'RESOLVED_EXTERNALLY' },
+    ],
+  });
+  await s.price(1, true);
+  expect(await s.submit()).toMatchObject({
+    items: [
+      { state: 'AWAITING_RECEIPT' },
+      { state: 'AWAITING_RECEIPT' },
+      { state: 'RESOLVED_EXTERNALLY' },
+    ],
+    rounds: [{ status: 'SUBMITTED' }, { status: 'SUBMITTED' }],
+  });
+  await s.receipt(1, '2');
+  expect(await s.receipt(0, '2', true)).toMatchObject({
+    status: 'COMPLETED',
+    items: [
+      { state: 'RECEIVED' },
+      { state: 'RECEIVED' },
+      { state: 'RESOLVED_EXTERNALLY' },
+    ],
+  });
+});
+it('links both sides when a request awaiting receipt is copied to a draft', async () => {
   const s = await scenario();
   await s.approve();
   await s.price();
   await s.submit();
-  expect(
-    await s.step(approver, 'post', '/rounds/1/reject', { reason: 'مرتفع' }, [
-      'PRICING_REJECTED',
-      'REJECTED_AUTO',
-    ]),
-  ).toMatchObject({ status: 'REJECTED', items: [{ state: 'REJECTED' }] });
   const copied = await s.step(
     engineer,
     'post',
     '/copy',
-    { itemIds: s.ids, roundNo: 1 },
+    {},
     ['COPIED_TO'],
     201,
   );
@@ -422,7 +391,7 @@ it('returns through both review desks and reprices an edited sent line after res
   expect(await s.price()).toMatchObject({ items: [{ needsRepricing: false }] });
   expect(await s.submit()).toMatchObject({
     status: 'FULFILMENT',
-    items: [{ state: 'AWAITING_APPROVAL' }],
+    items: [{ state: 'AWAITING_RECEIPT' }],
   });
 });
 it.each([
@@ -443,7 +412,6 @@ it.each([
   if (stage === 'FULFILMENT') {
     await s.price();
     await s.submit();
-    await s.accept();
     await s.receipt(0, '1', false, true);
   }
   expect(
@@ -467,7 +435,6 @@ it('redacts a populated purchase across detail, round, timeline, list and inbox'
   await s.batch();
   await s.price();
   await s.submit();
-  await s.accept();
   const base = '/requests/' + s.id;
   for (const path of [base, base + '/purchasing', '/requests', '/inbox']) {
     const result = await http(reader, 'get', path).expect(200);
@@ -478,11 +445,13 @@ it('redacts a populated purchase across detail, round, timeline, list and inbox'
   }
   await http(reader, 'get', base + '/timeline').expect(403);
   const timeline = await http(historian, 'get', base + '/timeline').expect(200);
-  expect(timeline.text).toContain('PRICING_SUBMITTED');
+  expect(timeline.text).toContain('PRICING_SENT_FOR_RECEIPT');
   expect(timeline.text).not.toMatch(
     /Supplier P19|3917\.45|"(?:lineTotal|supplierIds?|deliveryFee|roundTotal)":/,
   );
-  const approved = await http(approver, 'get', base + '/rounds/1').expect(200);
-  expect(approved.body.roundTotal).toBe('3917.45');
-  expect(approved.text).not.toMatch(/Supplier P19|"supplier":/);
+  // The round history needs price visibility; supplier names stay hidden without their key.
+  await http(reader, 'get', base + '/rounds/1').expect(403);
+  const round = await http(accountant, 'get', base + '/rounds/1').expect(200);
+  expect(round.body.roundTotal).toBe('3917.45');
+  expect(round.text).not.toMatch(/Supplier P19|"supplier":/);
 });

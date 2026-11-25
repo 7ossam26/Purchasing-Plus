@@ -45,6 +45,11 @@ export const displayedStages = [
   'CANCELLED',
 ] as const;
 export type DisplayedStage = (typeof displayedStages)[number];
+// AWAITING_APPROVAL survives only in history from before pricing approval was removed.
+// No transition enters it, so filters and the stage rail offer the stages below.
+export const activeStages = displayedStages.filter(
+  (stage) => stage !== 'AWAITING_APPROVAL',
+);
 
 export interface Viewer {
   userId: number;
@@ -118,10 +123,19 @@ export interface RoundLine {
   lineTotal: string;
   quantity: string;
 }
+// SUBMITTED is the only status a new round gets: submitting pricing sends it straight to receipt.
+// PENDING, APPROVED and REJECTED are kept for rounds recorded under the former approval step.
+export const roundStatuses = [
+  'PENDING',
+  'SUBMITTED',
+  'APPROVED',
+  'REJECTED',
+] as const;
+export type RoundStatus = (typeof roundStatuses)[number];
 export interface PricingRound {
   number: number;
   lines: RoundLine[];
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: RoundStatus;
   decidedById: number | null;
   decidedAt: string | null;
 }

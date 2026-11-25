@@ -65,14 +65,7 @@ export const seeds: {
   {
     name: 'مدير الموقع',
     siteScope: 'ASSIGNED',
-    keys: [
-      ...read,
-      ...changes,
-      'pricing.approve',
-      'pricing.reject',
-      ...reports,
-      'records.view',
-    ],
+    keys: [...read, ...changes, ...reports, 'records.view'],
   },
   {
     name: 'مسؤول المشتريات',
@@ -93,8 +86,8 @@ export const seeds: {
     name: 'المحاسب',
     siteScope: 'ALL',
     keys: [
+      // Accounting follows every request in scope without approving anything.
       ...read.filter((k) => k !== 'catalog.view'),
-      'pricing.approve',
       ...reports,
       'reports.userActivity',
       'records.view',
@@ -113,8 +106,6 @@ export const seeds: {
       'requests.cancelAnyStage',
       'receipt.record',
       'items.resolveExternally',
-      'pricing.approve',
-      'pricing.reject',
       ...reports,
       'reports.userActivity',
       'records.view',

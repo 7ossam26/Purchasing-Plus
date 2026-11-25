@@ -380,7 +380,7 @@ it('clears only edited draft prices, marks only previously sent lines and resume
     now,
   );
   expect(priced.next.items.map((i) => i.state)).toEqual([
-    'AWAITING_APPROVAL',
+    'AWAITING_RECEIPT',
     'OPEN',
     'UNAVAILABLE',
     'OPEN',

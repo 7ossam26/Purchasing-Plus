@@ -10,6 +10,7 @@ import {
   names,
   now,
   only,
+  roundLine,
   sample,
   viewer,
 } from './fixtures.js';
@@ -92,7 +93,6 @@ it.each([
   ['drafts', 'RETURNED', 'OPEN', 'requests.create'],
   ['manager', 'AWAITING_MANAGER', 'OPEN', 'requests.approve'],
   ['paused', 'PAUSED', 'OPEN', 'requests.editWhilePaused'],
-  ['pricingApproval', 'FULFILMENT', 'AWAITING_APPROVAL', 'pricing.approve'],
   ['receipt', 'FULFILMENT', 'AWAITING_RECEIPT', 'receipt.record'],
   ['purchasing', 'AT_PURCHASING', 'OPEN', 'purchasing.price'],
   ['purchasing', 'AT_PURCHASING', 'OPEN', 'purchasing.sendRfq'],
@@ -114,6 +114,23 @@ it.each([
       expect(life.inQueue(queue, s, { ...v, userId: 99 })).toBe(false);
   },
 );
+it('has no pricing approval queue: submitted pricing waits in the site’s receipt queue', () => {
+  expect(life.queueNames).not.toContain('pricingApproval');
+  const { state, input } = sample('submitPricing');
+  const sent = life.applySubmitPricing(
+    state,
+    only('purchasing.price'),
+    input,
+    now,
+  );
+  const engineer = only('receipt.record');
+  expect(life.inQueue('receipt', sent.next, engineer)).toBe(true);
+  expect(
+    life.inQueue('receipt', sent.next, { ...engineer, siteIds: [99] }),
+  ).toBe(false);
+  for (const queue of life.queueNames)
+    expect(life.inQueue(queue, sent.next, only('requests.view'))).toBe(false);
+});
 it('places an unsent order in the senders’ queue and removes it immediately after marking it sent', () => {
   const { state } = sample('markSupplyOrderSent'),
     v = only('purchasing.sendSupplyOrder');
@@ -139,9 +156,12 @@ const recipientRules: Partial<
   reject: ['creator'],
   returnForEdit: ['creator'],
   purchasingReturnForEdit: ['creator'],
-  rejectPricing: ['creator'],
-  submitPricing: ['pricing.approve'],
-  approvePricing: ['creator', 'receipt.record', 'purchasing.sendSupplyOrder'],
+  submitPricing: ['creator', 'receipt.record', 'purchasing.sendSupplyOrder'],
+  releasePendingPricing: [
+    'creator',
+    'receipt.record',
+    'purchasing.sendSupplyOrder',
+  ],
   recordReceipt: ['purchasing.handleRemaining'],
 };
 it.each(names)(
@@ -158,7 +178,8 @@ it.each(names)(
       expect(intent).toMatchObject({
         requestId: state.id,
         siteId: state.siteId,
-        excludeUserId: 7,
+        // A system transition has no actor to leave out.
+        excludeUserId: who ? 7 : null,
         excludeSuperadmins: true,
         event: result.events[0]!.type,
       });
@@ -166,7 +187,7 @@ it.each(names)(
       expect(
         life.matchesRecipient(intent, { ...eligible, isSuperadmin: true }),
       ).toBe(false);
-      expect(life.matchesRecipient(intent, viewer)).toBe(false);
+      if (who) expect(life.matchesRecipient(intent, viewer)).toBe(false);
       expect(life.matchesRecipient(intent, { ...eligible, siteIds: [] })).toBe(
         false,
       );
@@ -177,19 +198,14 @@ it.each(names)(
   },
 );
 it('omits direct notifications to a creator acting on their own request, and full receipts stay quiet', () => {
-  const { state } = sample('approvePricing');
-  const approval = life.applyApprovePricing(
-    state,
-    viewer,
-    { roundNo: 1, version: 1 },
-    now,
-  );
-  expect(approval.notify.map((n) => 'holdersOf' in n && n.holdersOf)).toEqual([
+  const { state } = sample('submitPricing');
+  const submitted = life.applySubmitPricing(state, viewer, { version: 1 }, now);
+  expect(submitted.notify.map((n) => 'holdersOf' in n && n.holdersOf)).toEqual([
     'receipt.record',
     'purchasing.sendSupplyOrder',
   ]);
   const receipt = life.applyRecordReceipt(
-    approval.next,
+    submitted.next,
     viewer,
     { version: 2, lines: [{ itemId: 11, quantity: '4.00' }] },
     now,
@@ -204,15 +220,52 @@ it('validates and describes every specified event, including conversion and link
   const seed = fixture();
   seed.version = 0;
   all.push(...life.applySaveDraft(seed, viewer, { version: 0 }, now).events);
-  all.push({
-    type: 'ADDED_TO_CATALOG',
-    payload: { lineNo: 1, code: 'T01' },
+  const recorded = {
     itemIds: [11],
     actorId: 7,
     at: now.toISOString(),
-    stageAfter: 'AT_PURCHASING',
     requestId: 1,
-  });
+  };
+  all.push(
+    {
+      ...recorded,
+      type: 'ADDED_TO_CATALOG',
+      payload: { lineNo: 1, code: 'T01' },
+      stageAfter: 'AT_PURCHASING',
+    },
+    // Only history from before pricing approval was removed carries these events.
+    {
+      ...recorded,
+      type: 'PRICING_SUBMITTED',
+      payload: {
+        roundNo: 1,
+        items: [{ ...roundLine }],
+        roundTotal: '13.50',
+        deliveryFee: null,
+      },
+      stageAfter: 'AWAITING_APPROVAL',
+    },
+    {
+      ...recorded,
+      type: 'PRICING_APPROVED',
+      payload: { roundNo: 1 },
+      stageAfter: 'AWAITING_RECEIPT',
+    },
+    {
+      ...recorded,
+      type: 'PRICING_REJECTED',
+      payload: { roundNo: 1, reason: 'تعديل مطلوب' },
+      stageAfter: 'REJECTED',
+    },
+    {
+      ...recorded,
+      actorId: null,
+      itemIds: [],
+      type: 'REJECTED_AUTO',
+      payload: {},
+      stageAfter: 'REJECTED',
+    },
+  );
   expect(new Set(all.map((e) => e.type))).toEqual(
     new Set(Object.keys(life.eventPayloadSchemas)),
   );

@@ -88,6 +88,23 @@ export async function loadRequestInScope(
   if (!row) throw missing();
   return row;
 }
+// System jobs act on every site. Lock the row before reading so a concurrent user transition
+// and the job never both apply to the same version.
+export async function loadRequestForSystem(tx: Tx, requestId: number) {
+  await tx.$queryRaw(Prisma.sql`
+    SELECT id FROM "Request" WHERE id = ${requestId} FOR UPDATE
+  `);
+  return tx.request.findUnique({ where: { id: requestId }, include });
+}
+// Requests with a pricing round still waiting for the removed approval step.
+export async function pendingApprovalIds(tx: Tx) {
+  const rows = await tx.request.findMany({
+    where: { status: 'FULFILMENT', rounds: { some: { status: 'PENDING' } } },
+    select: { id: true },
+    orderBy: { id: 'asc' },
+  });
+  return rows.map((row) => row.id);
+}
 
 export function toState(row: RequestRecord): RequestState {
   const {
@@ -405,7 +422,9 @@ export async function appendNotifications(
     where: {
       isActive: true,
       isSuperadmin: false,
-      id: { not: first.excludeUserId },
+      ...(first.excludeUserId === null
+        ? {}
+        : { id: { not: first.excludeUserId } }),
       AND: [
         {
           OR: [

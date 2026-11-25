@@ -1,5 +1,8 @@
 import type { receiptInput } from '@purchasing-plus/shared';
-import type { RequestItem } from '@purchasing-plus/shared/lifecycle';
+import type {
+  RequestItem,
+  RoundStatus,
+} from '@purchasing-plus/shared/lifecycle';
 
 import { api } from './client.js';
 import type { RequestDto } from './requests.js';
@@ -12,7 +15,7 @@ export type ActorSnapshot = {
 };
 export type RoundSummary = {
   number: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: RoundStatus;
   decidedAt: string | null;
   decidedBy: ActorSnapshot | null;
   itemIds: number[];
@@ -62,11 +65,6 @@ export const roundKey = (id: number) => ['requests', 'rounds', id] as const;
 export const fulfilmentApi = {
   round: (id: number, number: number, signal: AbortSignal) =>
     api<Round>(round(id, number), { signal }),
-  decide: (id: number, number: number, version: number, reason?: string) =>
-    post(round(id, number) + (reason === undefined ? '/approve' : '/reject'), {
-      version,
-      reason,
-    }),
   editMessage: (id: number, number: number, version: number, message: string) =>
     api<RequestDto>(order(id, number), {
       method: 'PATCH',

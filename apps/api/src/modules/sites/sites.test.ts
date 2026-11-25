@@ -98,7 +98,7 @@ beforeAll(async () => {
   await db.user.update({ where: { id: dormant }, data: { isActive: false } });
   privileged = await account(
     'eng-privileged',
-    [...engineerKeys, 'pricing.approve'],
+    [...engineerKeys, 'requests.cancelAnyStage'],
     [east],
   );
   allScope = await account('eng-all', engineerKeys, [], 'ALL');

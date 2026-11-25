@@ -46,6 +46,12 @@ export const editDiffSchema = z.strictObject({
 });
 export type EditDiff = z.infer<typeof editDiffSchema>;
 const link = z.strictObject({ requestId: id, number: z.string().nullable() });
+const submittedRound = z.strictObject({
+  roundNo: id,
+  items: z.array(pricedLine).min(1),
+  roundTotal: z.string().regex(/^\d+\.\d{2}$/),
+  deliveryFee: amount.nullable(),
+});
 export const eventPayloadSchemas = {
   CREATED: empty,
   SUBMITTED: empty,
@@ -70,12 +76,12 @@ export const eventPayloadSchemas = {
   BATCH_SENT_MARKED: z.strictObject({ batchId: id, supplierId: id }),
   ITEM_UNAVAILABLE: itemNote,
   ITEM_AVAILABLE_AGAIN: itemNote,
-  PRICING_SUBMITTED: z.strictObject({
-    roundNo: id,
-    items: z.array(pricedLine).min(1),
-    roundTotal: z.string().regex(/^\d+\.\d{2}$/),
-    deliveryFee: amount.nullable(),
-  }),
+  // A round sent for the former pricing approval. Kept for history only.
+  PRICING_SUBMITTED: submittedRound,
+  // A round submitted by purchasing that went straight to the site for receipt.
+  PRICING_SENT_FOR_RECEIPT: submittedRound,
+  // The one-time migration released rounds left waiting for the removed approval.
+  PRICING_RELEASED: z.strictObject({ roundNos: z.array(id).min(1) }),
   DELIVERY_FEE_CHANGED: z.strictObject({
     before: amount.nullable(),
     after: amount.nullable(),

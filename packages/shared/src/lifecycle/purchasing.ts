@@ -19,7 +19,6 @@ import {
   unitPrice,
   validReceiptQuantity,
   type ItemState,
-  type PricingRound,
   type RequestItem,
   type RequestState,
   type RoundLine,
@@ -232,51 +231,10 @@ const priceLine = (item: RequestItem): RoundLine => ({
   lineTotal: item.lineTotal!,
   quantity: item.pricedQuantity ?? item.quantity,
 });
-export const submitPricing = action(
-  command({}),
-  { ...pricing, ready: pricingReady, hint: 'primary' },
-  (ctx) => {
-    const s = ctx.state,
-      items = s.items.filter(isPricingCandidate);
-    const lines = items.map(priceLine);
-    const roundNo = (s.rounds.at(-1)?.number ?? 0) + 1;
-    s.rounds.push({
-      number: roundNo,
-      lines,
-      status: 'PENDING',
-      decidedAt: null,
-      decidedById: null,
-    });
-    items.forEach((i) => {
-      i.state = 'AWAITING_APPROVAL';
-    });
-    s.status = 'FULFILMENT';
-    const roundTotal = sumAmounts(lines.map((line) => line.lineTotal));
-    ctx.emit(
-      'PRICING_SUBMITTED',
-      { roundNo, items: lines, roundTotal, deliveryFee: s.deliveryFee },
-      items.map((i) => i.id),
-    );
-  },
-);
-const pending = (s: RequestState) =>
-  s.rounds.some((r) => r.status === 'PENDING')
-    ? undefined
-    : 'ROUND_NOT_PENDING';
-function decide(ctx: Context, no: number, status: 'APPROVED' | 'REJECTED') {
-  const r =
-    ctx.state.rounds.find((r) => r.number === no && r.status === 'PENDING') ??
-    refuse('ROUND_NOT_PENDING');
-  for (const line of r.lines)
-    target(ctx.state, line.itemId, 'AWAITING_APPROVAL').state =
-      status === 'APPROVED' ? 'AWAITING_RECEIPT' : 'REJECTED';
-  Object.assign(r, { status, decidedAt: ctx.now, decidedById: ctx.actorId });
-  return r.lines;
-}
 function recordPrice(
   ctx: Context,
   line: RoundLine,
-  source: 'APPROVED' | 'REPRICED',
+  source: 'SUBMITTED' | 'REPRICED',
 ) {
   if (line.catalogItemId !== null)
     ctx.result.priceRecords.push({
@@ -299,50 +257,72 @@ function createOrders(s: RequestState, lines: RoundLine[]) {
     });
   }
 }
-export const approvePricing = action(
-  command({ roundNo: id }),
-  {
-    key: 'pricing.approve',
-    statuses: fulfilment,
-    ready: pending,
-    hint: 'primary',
-  },
-  (ctx, i) => {
-    const lines = decide(ctx, i.roundNo, 'APPROVED');
-    lines.forEach((l) => recordPrice(ctx, l, 'APPROVED'));
-    createOrders(ctx.state, lines);
-    ctx.emit(
-      'PRICING_APPROVED',
-      { roundNo: i.roundNo },
-      lines.map((l) => l.itemId),
-    );
-  },
-);
-export const rejectPricing = action(
-  command({ roundNo: id, reason: z.string().trim().min(1) }),
-  {
-    key: 'pricing.reject',
-    statuses: fulfilment,
-    ready: pending,
-    hint: 'danger',
-  },
-  (ctx, i) => {
-    const lines = decide(ctx, i.roundNo, 'REJECTED');
-    ctx.emit(
-      'PRICING_REJECTED',
-      { roundNo: i.roundNo, reason: i.reason },
-      lines.map((l) => l.itemId),
-    );
-    if (rejectingRoundEndsRequest(i.roundNo, ctx.state.rounds))
-      finish(ctx, 'REJECTED');
-  },
-);
-export function rejectingRoundEndsRequest(
-  roundNo: number,
-  rounds: ReadonlyArray<Pick<PricingRound, 'status'>>,
+// Submitted lines go straight to the site: they wait for receipt, become the catalog's latest
+// purchase price, and get one supply order per supplier. Nothing waits for an approval.
+function sendForReceipt(
+  ctx: Context,
+  lines: RoundLine[],
+  from: 'OPEN' | 'AWAITING_APPROVAL',
 ) {
-  return roundNo === 1 && !rounds.some((round) => round.status === 'APPROVED');
+  for (const line of lines)
+    target(ctx.state, line.itemId, from).state = 'AWAITING_RECEIPT';
+  lines.forEach((line) => recordPrice(ctx, line, 'SUBMITTED'));
+  createOrders(ctx.state, lines);
 }
+// T16. Price drafts (savePricingDraft) never leave pricing. Only this final submission does,
+// and it hands the priced lines to the site engineer for receipt in the same transition.
+export const submitPricing = action(
+  command({}),
+  { ...pricing, ready: pricingReady, hint: 'primary' },
+  (ctx) => {
+    const s = ctx.state,
+      items = s.items.filter(isPricingCandidate);
+    const lines = items.map(priceLine);
+    const roundNo = (s.rounds.at(-1)?.number ?? 0) + 1;
+    s.rounds.push({
+      number: roundNo,
+      lines,
+      status: 'SUBMITTED',
+      decidedAt: null,
+      decidedById: null,
+    });
+    s.status = 'FULFILMENT';
+    sendForReceipt(ctx, lines, 'OPEN');
+    const roundTotal = sumAmounts(lines.map((line) => line.lineTotal));
+    ctx.emit(
+      'PRICING_SENT_FOR_RECEIPT',
+      { roundNo, items: lines, roundTotal, deliveryFee: s.deliveryFee },
+      items.map((i) => i.id),
+    );
+  },
+);
+export function pendingRounds(state: Pick<RequestState, 'rounds'>) {
+  return state.rounds.filter((round) => round.status === 'PENDING');
+}
+// One-time migration: rounds submitted before the approval step was removed still wait for a
+// decision that no one can make. Release them to receipt exactly as a submission does now.
+// It runs only as the system and refuses once nothing is pending, so a rerun changes nothing.
+export const releasePendingPricing = action(
+  command({}),
+  {
+    key: 'system',
+    statuses: fulfilment,
+    ready: (s) => (pendingRounds(s).length ? undefined : 'ROUND_NOT_PENDING'),
+  },
+  (ctx) => {
+    const rounds = pendingRounds(ctx.state);
+    for (const round of rounds) {
+      round.status = 'SUBMITTED';
+      sendForReceipt(ctx, round.lines, 'AWAITING_APPROVAL');
+    }
+    ctx.emit(
+      'PRICING_RELEASED',
+      { roundNos: rounds.map((round) => round.number) },
+      rounds.flatMap((round) => round.lines.map((line) => line.itemId)),
+      true,
+    );
+  },
+);
 const pendingOrderRules = {
   key: 'purchasing.sendSupplyOrder',
   statuses: fulfilment,

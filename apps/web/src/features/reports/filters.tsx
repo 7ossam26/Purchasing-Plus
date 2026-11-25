@@ -5,7 +5,7 @@ import {
 } from '@purchasing-plus/shared';
 import { reportsUi as copy } from '@purchasing-plus/shared/i18n/ar';
 import {
-  displayedStages,
+  activeStages,
   requestStatuses,
   statusMap,
   urgencies,
@@ -177,7 +177,7 @@ export function FilterForm({
             {select(
               copy.stage,
               'stage',
-              statusChoices(displayedStages),
+              statusChoices(activeStages),
               copy.allValues,
             )}
             {select(

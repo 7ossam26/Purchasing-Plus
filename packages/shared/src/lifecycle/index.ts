@@ -7,8 +7,8 @@ export { diffRequest } from './edits.js';
 export { catalogConversionItem, copyableItems } from './request.js';
 export {
   isPricingCandidate,
+  pendingRounds,
   pricingDraftAction,
-  rejectingRoundEndsRequest,
   wasBatchSent,
   wasSupplyOrderSent,
 } from './purchasing.js';

@@ -2,9 +2,22 @@ import { expect, it } from 'vitest';
 
 import {
   defaultSettings,
+  previousSupplyOrderIntros,
   renderMessageTemplate,
   settingsSchema,
 } from '../src/settings.js';
+
+it('says a supply order was issued, not that the request was approved', () => {
+  expect(defaultSettings.supplyOrderIntro).toContain('تم إصدار أمر توريد');
+  expect(defaultSettings.supplyOrderIntro).not.toContain('اعتماد');
+  expect(previousSupplyOrderIntros).toEqual([
+    expect.stringContaining('تم اعتماد طلب'),
+  ]);
+  for (const template of previousSupplyOrderIntros)
+    expect(
+      settingsSchema.parse({ ...defaultSettings, supplyOrderIntro: template }),
+    ).toBeTruthy();
+});
 
 it('accepts the seed templates and all supported placeholders', () => {
   expect(settingsSchema.parse(defaultSettings)).toEqual(defaultSettings);

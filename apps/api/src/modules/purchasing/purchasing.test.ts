@@ -41,8 +41,8 @@ let maker: User,
   buyer: User,
   manager: User,
   outsider: User,
-  otherApprover: User,
-  allApprover: User,
+  otherReceiver: User,
+  allReceiver: User,
   support: User,
   reader: User,
   pricesViewer: User,
@@ -66,7 +66,6 @@ const buyingKeys: PermissionKey[] = [
 const managerKeys: PermissionKey[] = [
   'requests.approve',
   'requests.editWhilePaused',
-  'pricing.approve',
   'requests.pause',
   'purchasing.handleRemaining',
   'purchasing.sendSupplyOrder',
@@ -135,6 +134,8 @@ async function supplier(
 
 beforeAll(async () => {
   await resetDb();
+  // Startup seeds this singleton; submitting pricing reads it to write supply orders.
+  await db.settings.create({ data: { id: 1, ...defaultSettings } });
   siteId = (await db.site.create({ data: { name: 'شرق' } })).id;
   otherSite = (await db.site.create({ data: { name: 'غرب' } })).id;
   categoryId = await category('الأرضيات', 'FLR');
@@ -145,9 +146,10 @@ beforeAll(async () => {
   foreignSupplier = await supplier('إضاءة تاء', '201201234567', otherCategory);
   inactiveSupplier = await supplier('متوقف', '201501234567', categoryId, false);
   maker = await user('purchasing-maker', ['requests.create'], [siteId]);
+  // The buyer also records receipt, to show the actor is never notified of their own submission.
   buyer = await user(
     'purchasing-buyer',
-    [...buyingKeys, 'pricing.approve'],
+    [...buyingKeys, 'receipt.record'],
     [siteId],
   );
   manager = await user('purchasing-manager', managerKeys, [siteId]);
@@ -156,14 +158,14 @@ beforeAll(async () => {
     [...buyingKeys, ...managerKeys],
     [otherSite],
   );
-  otherApprover = await user(
-    'purchasing-approver-other',
-    ['pricing.approve'],
+  otherReceiver = await user(
+    'purchasing-receiver-other',
+    ['receipt.record'],
     [otherSite],
   );
-  allApprover = await user(
-    'purchasing-approver-all',
-    ['pricing.approve'],
+  allReceiver = await user(
+    'purchasing-receiver-all',
+    ['receipt.record'],
     [],
     'ALL',
   );
@@ -761,7 +763,7 @@ it('pauses, sets both independent edit flags, refuses stale prices and records p
   });
 });
 
-it('submits normalized rounds, leaves unavailable lines, and notifies only scoped approval holders', async () => {
+it('submits normalized rounds straight to receipt, leaves unavailable lines, and notifies only the scoped engineer, receivers and order senders', async () => {
   const r = await atPurchasing(2);
   const first = r.items[0]!.id,
     second = r.items[1]!.id;
@@ -784,9 +786,9 @@ it('submits normalized rounds, leaves unavailable lines, and notifies only scope
   ).body;
   expect(sent).toMatchObject({
     status: 'FULFILMENT',
-    displayedStage: 'AWAITING_APPROVAL',
+    displayedStage: 'AWAITING_RECEIPT',
     items: [
-      { state: 'AWAITING_APPROVAL', lineTotal: '1.01' },
+      { state: 'AWAITING_RECEIPT', lineTotal: '1.01' },
       { state: 'UNAVAILABLE' },
     ],
   });
@@ -797,7 +799,9 @@ it('submits normalized rounds, leaves unavailable lines, and notifies only scope
   expect(rounds).toMatchObject([
     {
       number: 1,
-      status: 'PENDING',
+      status: 'SUBMITTED',
+      decidedAt: null,
+      decidedById: null,
       submittedById: buyer.id,
       items: [{ itemId: first, supplierId: firstSupplier }],
     },
@@ -834,7 +838,7 @@ it('submits normalized rounds, leaves unavailable lines, and notifies only scope
   ).body;
   expect(
     round2.items.every(
-      (item: { state: string }) => item.state === 'AWAITING_APPROVAL',
+      (item: { state: string }) => item.state === 'AWAITING_RECEIPT',
     ),
   ).toBe(true);
   const persisted = await db.pricingRound.findMany({
@@ -853,7 +857,7 @@ it('submits normalized rounds, leaves unavailable lines, and notifies only scope
     [2, '6.00', [second]],
   ]);
   const events = (await timeline(r)).filter(
-    (event) => event.type === 'PRICING_SUBMITTED',
+    (event) => event.type === 'PRICING_SENT_FOR_RECEIPT',
   );
   expect(events.map((event) => event.payload)).toMatchObject([
     { roundNo: 1, roundTotal: '1.01', deliveryFee: '30.00' },
@@ -864,13 +868,13 @@ it('submits normalized rounds, leaves unavailable lines, and notifies only scope
       where: { eventId: event.id },
       orderBy: { userId: 'asc' },
     });
+    // The engineer who asked, in-scope receivers and supply-order senders; never the actor,
+    // another site's receiver or support.
     expect(notifications.map((row) => row.userId)).toEqual(
-      [manager.id, allApprover.id].sort((a, b) => a - b),
+      [maker.id, manager.id, allReceiver.id].sort((a, b) => a - b),
     );
-    expect(notifications.map((row) => row.userId)).not.toContain(
-      otherApprover.id,
-    );
-    expect(notifications.map((row) => row.userId)).not.toContain(support.id);
+    for (const absent of [otherReceiver.id, support.id, buyer.id])
+      expect(notifications.map((row) => row.userId)).not.toContain(absent);
   }
   expect(
     (
@@ -885,15 +889,17 @@ it('submits normalized rounds, leaves unavailable lines, and notifies only scope
     (await send('get', '/?queue=purchasing', undefined, outsider).expect(200))
       .body.items,
   ).toEqual([]);
-  await db.supplyOrder.create({
-    data: {
-      requestId: r.id,
-      number: 1,
-      supplierId: firstSupplier,
-      createdAt: now,
-      message: 'توريد',
-    },
-  });
+  // Each submission created its own unsent supply order for the senders' queue.
+  expect(
+    await db.supplyOrder.findMany({
+      where: { requestId: r.id },
+      select: { number: true, supplierId: true, sentAt: true },
+      orderBy: { number: 'asc' },
+    }),
+  ).toEqual([
+    { number: 1, supplierId: firstSupplier, sentAt: null },
+    { number: 2, supplierId: secondSupplier, sentAt: null },
+  ]);
   expect(
     (
       await send(
@@ -904,7 +910,6 @@ it('submits normalized rounds, leaves unavailable lines, and notifies only scope
       ).expect(200)
     ).body.items.some((item: Record) => item.id === r.id),
   ).toBe(true);
-  await db.supplyOrder.deleteMany({ where: { requestId: r.id } });
 });
 
 it('redacts draft prices, fee, supplier names, phones and RFQ messages by permission', async () => {

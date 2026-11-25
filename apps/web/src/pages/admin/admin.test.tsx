@@ -104,7 +104,7 @@ it('copies available permissions, saves the complete role payload and leaves cle
     keyCount: 3,
     userCount: 0,
     canEdit: false,
-    keys: ['requests.view', 'requests.create', 'pricing.approve'],
+    keys: ['requests.view', 'requests.create', 'requests.cancelAnyStage'],
   };
   const { router, fetch } = setup('/admin/roles/new', (_path, init) => {
     if (init?.method === 'POST')

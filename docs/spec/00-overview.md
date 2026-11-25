@@ -50,7 +50,7 @@ Roles are created in the role editor, never in code (see `01-access-control.md`)
 | Request | طلب | One request for one site and one category |
 | Request item | بند | One line of a request |
 | Price-request batch | دفعة طلب أسعار | A set of items sent to a set of suppliers on WhatsApp |
-| Pricing round | جولة تسعير | A set of priced items submitted together for approval |
+| Pricing round | جولة تسعير | A set of priced items submitted together; it goes straight to the site engineer for receipt (no approval step since 2026-11-25) |
 | Supply order | أمر توريد | WhatsApp message telling a winning supplier to deliver |
 | Receipt | استلام | Quantity the engineer confirms arrived on site |
 | Timeline | السجل الزمني | Per-request history of every event |

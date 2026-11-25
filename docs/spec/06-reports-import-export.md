@@ -16,8 +16,8 @@ Pattern taken from ERP-V2: a reports hub with large tiles leads to individual re
 
 1. **نظرة عامة على الطلبات** (`reports.requestsOverview`) — KPIs: requests submitted, completed, rejected, cancelled during the period; open now by displayed stage. Breakdowns by site, category, urgency. Table of requests «متأخر» right now.
 2. **زمن المراحل** (`reports.stageTimes`) — average and median time per displayed stage (from timeline events), per site. Table of the 20 slowest requests in the period with the stage that held them longest.
-3. **الإنفاق** (`reports.spending`) — approved spend (sum of approved line totals, dated by approval; re-pricings dated by re-price) by site, category, supplier and month; delivery fees in a separate column. Excludes rejected and cancelled items.
-4. **الموردين** (`reports.suppliers`) — per supplier: items asked (from batches), items won, win rate = won ÷ asked, approved amount, supply orders sent.
+3. **الإنفاق** (`reports.spending`) — committed spend (sum of submitted line totals, dated by submission, or by the decision for rounds approved before 2026-11-25; re-pricings dated by re-price) by site, category, supplier and month; delivery fees in a separate column. Excludes rejected and cancelled items.
+4. **الموردين** (`reports.suppliers`) — per supplier: items asked (from batches), items won, win rate = won ÷ asked, submitted amount, supply orders sent.
 5. **تاريخ أسعار الأصناف** (`reports.priceHistory`) — pick an item (search by name/code); line chart of unit price over time with supplier per point; table of all price records.
 6. **البنود غير المتوفرة والمحلولة خارجيًا** (`reports.unavailable`) — items marked unavailable or resolved externally in the period, by category and site, with who resolved them and their role.
 7. **نشاط المستخدمين** (`reports.userActivity`) — per user: requests created, edits after submit, manager decisions, pricing rounds submitted, pricing decisions, receipts recorded.

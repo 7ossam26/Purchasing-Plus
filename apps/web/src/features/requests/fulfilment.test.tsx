@@ -80,11 +80,11 @@ const line = (
   lineTotal: '44.00',
   outstanding: '2.00',
 });
-const first = line(1, 'سلك نحاس', 'AWAITING_APPROVAL');
+const first = line(1, 'سلك نحاس', 'AWAITING_RECEIPT');
 const second = line(2, 'مفتاح', 'AWAITING_RECEIPT');
 const pending: RoundSummary = {
   number: 1,
-  status: 'PENDING',
+  status: 'SUBMITTED',
   decidedAt: null,
   decidedBy: null,
   itemIds: [1],
@@ -109,10 +109,7 @@ const round: Round = {
 const actions = (...names: ActionName[]): RequestDto['availableActions'] =>
   names.map((action) => ({
     action,
-    hint:
-      action === 'cancel' || action === 'rejectPricing'
-        ? 'danger'
-        : 'secondary',
+    hint: action === 'cancel' ? 'danger' : 'secondary',
   }));
 function counts(items: RequestLine[]) {
   return Object.fromEntries(
@@ -142,7 +139,7 @@ function record(
     site,
     category,
     creator: { id: 18, name: 'كريم' },
-    displayedStage: 'AWAITING_APPROVAL',
+    displayedStage: 'AWAITING_RECEIPT',
     stageStartedAt: date,
     deliveryFee: '5.00',
     stateCounts: counts(items),
@@ -240,88 +237,83 @@ const button = (name: string) =>
   screen.findByRole('button', { name }, { timeout: 5000 });
 const dialog = (name: string) => within(screen.getByRole('dialog', { name }));
 
-it('reviews a round, confirms approval, and renders the decision actor, role and date', async () => {
-  const { calls } = setup(
-    record([first], {
-      rounds: [pending],
-      availableActions: actions('approvePricing'),
+// Approval was removed: the literal labels the former buttons used must never come back.
+const formerActions = ['اعتماد التسعير', 'رفض التسعير'];
+const noDecisionControls = () => {
+  for (const name of formerActions)
+    expect(screen.queryByRole('button', { name })).toBeNull();
+};
+
+it('shows submitted pricing read-only to a price viewer, with the separate fee and historical approval attribution', async () => {
+  const approved: RoundSummary = {
+    ...pending,
+    status: 'APPROVED',
+    decidedAt: date,
+    decidedBy: actor,
+  };
+  const { fetch } = setup(
+    record([first, second], {
+      rounds: [approved, { ...pending, number: 2, itemIds: [second.id] }],
     }),
-    ['pricing.approve', 'requests.viewPrices', 'requests.viewSupplierNames'],
-    (_call, current) =>
-      record([{ ...first, state: 'AWAITING_RECEIPT' }], {
-        version: current.version + 1,
-        displayedStage: 'AWAITING_RECEIPT',
-        rounds: [
-          { ...pending, status: 'APPROVED', decidedAt: date, decidedBy: actor },
-        ],
-      }),
+    ['requests.viewPrices', 'requests.viewSupplierNames'],
   );
-  const approve = await button(copy.approve);
-  expect(screen.getByText(supplier.name)).toBeTruthy();
-  expect(screen.getByText('▲ 10%').className).toContain('text-danger-fg');
+  const history = within(
+    (await screen.findByRole('heading', { name: copy.rounds })).closest(
+      'section',
+    )!,
+  );
+  const summaries = history.getAllByText(/جولة التسعير/);
+  // Newest first, each with its outcome; nothing waits for a decision.
+  expect(summaries.map((node) => node.textContent)).toEqual([
+    copy.round('2') + copy.roundStatus.SUBMITTED,
+    copy.round('1') + copy.roundStatus.APPROVED,
+  ]);
+  noDecisionControls();
+  fireEvent.click(summaries[0]!);
+  expect(await history.findByText(supplier.name)).toBeTruthy();
+  expect(history.getByText('▲ 10%').className).toContain('text-danger-fg');
   expect(
-    screen.getByText(new RegExp(buying.separateFee)).parentElement?.textContent,
+    history.getByText(new RegExp(buying.separateFee)).parentElement
+      ?.textContent,
   ).toContain(formatMoney('5.00'));
-  fireEvent.click(approve);
-  const confirm = dialog(copy.approveQuestion);
-  expect(confirm.getByText(copy.approveConsequence)).toBeTruthy();
-  fireEvent.click(confirm.getByRole('button', { name: copy.approve }));
-  const attribution = (await screen.findByText(new RegExp(copy.approvedBy)))
-    .parentElement;
+  // The approval recorded before the step was removed still names its actor, role and date.
+  const attribution = screen.getByText(
+    new RegExp(copy.approvedBy),
+  ).parentElement;
   expect(attribution?.textContent).toContain(
     actor.name + ' (' + actor.roleName + ')',
   );
   expect(attribution?.textContent).toContain(formatDateTime(date));
-  expect(calls).toEqual([
-    { suffix: '/rounds/1/approve', method: 'POST', body: { version: 9 } },
-  ]);
-  expect(screen.getByText(copy.previousRounds)).toBeTruthy();
-  expect(screen.queryByText('▲ 10%')).toBeNull();
+  expect(
+    fetch.mock.calls.some(([, init]) => (init?.method ?? 'GET') !== 'GET'),
+  ).toBe(false);
 });
 
-it('requires a rejection reason and copies the struck-through rejected lines only', async () => {
+it('keeps a historical rejection readable and copies only its struck-through rejected lines', async () => {
   const { calls, router } = setup(
-    record([first], {
-      rounds: [pending],
-      availableActions: actions('rejectPricing', 'copyRequest'),
+    record([{ ...first, state: 'REJECTED' }], {
+      status: 'REJECTED',
+      displayedStage: 'REJECTED',
+      availableActions: actions('copyRequest'),
+      rounds: [
+        {
+          ...pending,
+          status: 'REJECTED',
+          reason: 'السعر فوق الميزانية',
+          decidedBy: actor,
+          decidedAt: date,
+        },
+      ],
     }),
-    ['pricing.reject', 'requests.viewPrices', 'requests.create'],
-    ({ suffix }, current) =>
-      suffix === '/copy'
-        ? record([first], {
-            id: 11,
-            status: 'DRAFT',
-            displayedStage: 'DRAFT',
-            availableActions: actions('saveDraft'),
-          })
-        : record([{ ...first, state: 'REJECTED' }], {
-            version: current.version + 1,
-            status: 'REJECTED',
-            displayedStage: 'REJECTED',
-            availableActions: actions('copyRequest'),
-            rounds: [
-              {
-                ...pending,
-                status: 'REJECTED',
-                reason: 'السعر فوق الميزانية',
-                decidedBy: actor,
-                decidedAt: date,
-              },
-            ],
-          }),
+    ['requests.viewPrices', 'requests.create'],
+    () =>
+      record([first], {
+        id: 11,
+        status: 'DRAFT',
+        displayedStage: 'DRAFT',
+        availableActions: actions('saveDraft'),
+      }),
   );
-  expect(screen.queryByRole('button', { name: copy.approve })).toBeNull();
-  fireEvent.click(await button(copy.reject));
-  const reject = dialog(copy.reject);
-  expect(reject.getByText(copy.rejectFinalConsequence)).toBeTruthy();
-  const confirm = reject.getByRole<HTMLButtonElement>('button', {
-    name: copy.rejectFinal,
-  });
-  expect(confirm.disabled).toBe(true);
-  fireEvent.change(reject.getByRole('textbox', { name: ar.dialogs.reason }), {
-    target: { value: 'السعر فوق الميزانية' },
-  });
-  fireEvent.click(confirm);
   expect(
     (await screen.findByText(new RegExp(copy.rejectedBy))).parentElement
       ?.textContent,
@@ -329,6 +321,8 @@ it('requires a rejection reason and copies the struck-through rejected lines onl
   expect(
     screen.getByText('السعر فوق الميزانية', { exact: false }),
   ).toBeTruthy();
+  expect(screen.getByText(copy.roundStatus.REJECTED)).toBeTruthy();
+  noDecisionControls();
   expect(
     screen
       .getByRole('heading', { name: first.snapshot.name })
@@ -339,53 +333,21 @@ it('requires a rejection reason and copies the struck-through rejected lines onl
     expect(router.state.location.pathname).toBe('/requests/11/review'),
   );
   expect(calls).toEqual([
-    {
-      method: 'POST',
-      suffix: '/rounds/1/reject',
-      body: { version: 9, reason: 'السعر فوق الميزانية' },
-    },
-    { method: 'POST', suffix: '/copy', body: { version: 10, itemIds: [1] } },
+    { method: 'POST', suffix: '/copy', body: { version: 9, itemIds: [1] } },
   ]);
 });
 
-it('lets the viewer decide a later pending pricing round independently', async () => {
-  const round2 = { ...pending, number: 2, itemIds: [second.id] };
-  const { calls } = setup(
-    record([first, { ...second, state: 'AWAITING_APPROVAL' }], {
-      rounds: [pending, round2],
-      availableActions: actions('rejectPricing'),
+it('shows a round left undecided on a closed request as history without decision controls', async () => {
+  setup(
+    record([{ ...first, state: 'CANCELLED' }], {
+      status: 'CANCELLED',
+      displayedStage: 'CANCELLED',
+      rounds: [{ ...pending, status: 'PENDING' }],
     }),
-    ['pricing.reject', 'requests.viewPrices'],
-    (_call, current) => ({
-      ...current,
-      version: current.version + 1,
-      rounds: [
-        pending,
-        { ...round2, status: 'REJECTED', decidedAt: date, decidedBy: actor },
-      ],
-    }),
+    ['requests.viewPrices'],
   );
-  const card = within(
-    (await screen.findByRole('heading', { name: copy.round('2') })).closest(
-      'section',
-    )!,
-  );
-  fireEvent.click(await card.findByRole('button', { name: copy.reject }));
-  const reject = dialog(copy.reject);
-  expect(reject.getByText(copy.rejectConsequence)).toBeTruthy();
-  fireEvent.change(reject.getByRole('textbox', { name: ar.dialogs.reason }), {
-    target: { value: 'السعر اتغير' },
-  });
-  fireEvent.click(reject.getByRole('button', { name: copy.rejectRound }));
-  await screen.findByText(new RegExp(copy.rejectedBy));
-  expect(calls).toEqual([
-    {
-      method: 'POST',
-      suffix: '/rounds/2/reject',
-      body: { version: 9, reason: 'السعر اتغير' },
-    },
-  ]);
-  expect(await button(copy.reject)).toBeTruthy();
+  expect(await screen.findByText(copy.roundStatus.PENDING)).toBeTruthy();
+  noDecisionControls();
 });
 
 it('validates partial quantities and records multiple receipt lines together', async () => {
@@ -675,8 +637,8 @@ it('puts cancellation in overflow and requires a reason with the consequence', a
 it('hides pricing controls, prices and the receipt tab from a read-only viewer', async () => {
   const { fetch } = setup(record([first], { rounds: [pending] }), []);
   await screen.findByRole('heading', { name: first.snapshot.name });
-  expect(screen.queryByRole('button', { name: copy.approve })).toBeNull();
-  expect(screen.queryByRole('button', { name: copy.reject })).toBeNull();
+  noDecisionControls();
+  expect(screen.queryByRole('heading', { name: copy.rounds })).toBeNull();
   expect(screen.queryByRole('tab', { name: copy.receipt })).toBeNull();
   expect(screen.queryByText(formatMoney('44.00'))).toBeNull();
   expect(screen.queryByText(formatMoney('5.00'))).toBeNull();

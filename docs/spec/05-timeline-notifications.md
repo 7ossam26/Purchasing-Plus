@@ -16,9 +16,11 @@ The timeline is the most important screen to the client after the request itself
 | `BATCH_CREATED` | batch id, item line numbers, supplier ids |
 | `BATCH_SENT_MARKED` | batch id, supplier id |
 | `ITEM_UNAVAILABLE`, `ITEM_AVAILABLE_AGAIN` | line number, note |
-| `PRICING_SUBMITTED` | round number, items with supplier + line total, round total, delivery fee |
+| `PRICING_SENT_FOR_RECEIPT` | round number, items with supplier + line total, round total, delivery fee |
+| `PRICING_RELEASED` | round numbers released to receipt by the one-time migration (system actor) |
+| `PRICING_SUBMITTED` | history only: a round sent for the removed approval; same payload as above |
 | `DELIVERY_FEE_CHANGED` | before, after |
-| `PRICING_APPROVED`, `PRICING_REJECTED` | round number, reason |
+| `PRICING_APPROVED`, `PRICING_REJECTED` | history only: round number, reason |
 | `SUPPLY_ORDER_SENT_MARKED` | supplier id, line numbers |
 | `RECEIPT_RECORDED` | lines with quantities, note |
 | `ITEM_STILL_COMING`, `ITEM_REPRICED` | line, new supplier + amount |
@@ -28,7 +30,7 @@ The timeline is the most important screen to the client after the request itself
 | `CANCELLED` | reason |
 | `COMPLETED`, `REJECTED_AUTO` | — |
 
-Pricing drafts and autosaves are **not** events (too noisy). Their result appears in `PRICING_SUBMITTED`.
+Pricing drafts and autosaves are **not** events (too noisy). Their result appears in `PRICING_SENT_FOR_RECEIPT`.
 
 **Redaction (AC-7).** The timeline endpoint requires `requests.viewTimeline`. Amounts are removed from payloads without `requests.viewPrices`; supplier names without `requests.viewSupplierNames` (shown as «مورد»).
 
@@ -36,7 +38,7 @@ Pricing drafts and autosaves are **not** events (too noisy). Their result appear
 
 ### Stage rail
 
-Always visible at the top of the request page. A horizontal 7-segment rail: مسودة → بانتظار موافقة المدير → عند المشتريات → بانتظار اعتماد التسعير → بانتظار الاستلام → بنود متبقية → مكتمل. Completed segments are filled with the accent green, the current one is black with its name and «من يومين» under it, future ones are outlined. RETURNED and PAUSED appear as a notch marker on the current segment with its label. REJECTED and CANCELLED cut the rail with a danger-tone end cap. On phones the rail shows segments without labels plus the current stage name; tapping it scrolls to that stage in the timeline.
+Always visible at the top of the request page. A horizontal 6-segment rail: مسودة → بانتظار موافقة المدير → عند المشتريات → بانتظار الاستلام → بنود متبقية → مكتمل. A request rejected at the former pricing approval ends at «عند المشتريات». Completed segments are filled with the accent green, the current one is black with its name and «من يومين» under it, future ones are outlined. RETURNED and PAUSED appear as a notch marker on the current segment with its label. REJECTED and CANCELLED cut the rail with a danger-tone end cap. On phones the rail shows segments without labels plus the current stage name; tapping it scrolls to that stage in the timeline.
 
 ### Timeline body
 
@@ -63,9 +65,8 @@ Keep them quiet and useful. No sound, no browser push, no per-role settings.
 |---|---|
 | SUBMITTED, RESUBMITTED | `requests.approve` holders |
 | MANAGER_APPROVED, RESUMED | `purchasing.price` holders |
-| MANAGER_REJECTED, RETURNED_FOR_EDIT, PURCHASING_RETURNED, PRICING_REJECTED | creator |
-| PRICING_SUBMITTED | `pricing.approve` holders |
-| PRICING_APPROVED | creator, `receipt.record` holders, `purchasing.sendSupplyOrder` holders |
+| MANAGER_REJECTED, RETURNED_FOR_EDIT, PURCHASING_RETURNED | creator |
+| PRICING_SENT_FOR_RECEIPT, PRICING_RELEASED | creator (the site engineer), `receipt.record` holders, `purchasing.sendSupplyOrder` holders |
 | RECEIPT_RECORDED that creates REMAINING | `purchasing.handleRemaining` holders |
 | Urgency raised | none (badge only) |
 
